@@ -94,7 +94,7 @@ class PaymentService {
         amount: order.total_amount,
         description: `Order ${order.order_number}`,
         callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/result`,
-        webhookUrl: `${process.env.BACKEND_URL || 'http://localhost:3001'}/webhook.php`,
+        webhookUrl: `${process.env.BACKEND_URL || 'http://159.223.56.175:3001/api'}/webhook.php`,
         ...(options?.customerToken && { customerToken: options.customerToken }),
         ...(options?.capture !== undefined && { capture: options.capture }),
         ...(options?.tokenize !== undefined && { tokenize: options.tokenize }),
