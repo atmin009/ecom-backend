@@ -11,6 +11,7 @@ import { addressRoutes } from './routes/addressRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import brandRoutes from './routes/brandRoutes';
 import adminRoutes from './routes/adminRoutes';
+import { handleMoneyspecWebhook } from './controllers/paymentController';
 
 dotenv.config();
 
@@ -29,6 +30,11 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Webhook routes (must be before /api routes to avoid conflicts)
+// Support both /webhook.php and /api/webhook.php for Moneyspec
+app.post('/webhook.php', handleMoneyspecWebhook);
+app.post('/api/webhook.php', handleMoneyspecWebhook);
 
 // API Routes
 app.use('/api/products', productRoutes);

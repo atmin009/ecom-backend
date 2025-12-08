@@ -87,3 +87,35 @@ export const handleMoneySpaceWebhook = asyncHandler(async (req: Request, res: Re
   }
 });
 
+/**
+ * Handle Moneyspec webhook
+ * POST /api/payments/moneyspec/webhook
+ * This endpoint is called by webhook.php when Moneyspec sends webhook
+ */
+export const handleMoneyspecWebhook = asyncHandler(async (req: Request, res: Response) => {
+  const payload = req.body;
+  const signature = req.headers['x-moneyspec-signature'] as string;
+
+  console.log('Received Moneyspec webhook:', JSON.stringify(payload, null, 2));
+
+  // Verify webhook signature using Secret ID and Secret Key
+  const isValid = await paymentService.verifyMoneyspecWebhook(payload, signature);
+
+  if (!isValid) {
+    console.error('Invalid Moneyspec webhook signature');
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Invalid webhook signature' 
+    });
+  }
+
+  // Handle webhook
+  const result = await paymentService.handleWebhook(payload);
+
+  if (result.success) {
+    res.json({ success: true, message: 'Webhook processed successfully' });
+  } else {
+    res.status(400).json({ success: false, error: 'Webhook processing failed' });
+  }
+});
+

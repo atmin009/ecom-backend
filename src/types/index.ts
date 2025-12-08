@@ -140,6 +140,8 @@ export interface PaymentResponse {
   paymentUrl: string;
   qrCode?: string;
   transactionId?: string;
+  token?: string; // Moneyspec payment token
+  options?: any; // Payment options from Moneyspec API
 }
 
 // SMS types
