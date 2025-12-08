@@ -140,16 +140,37 @@ class PaymentService {
         }
       );
       
+      // Log full response for debugging
       console.log('✅ Moneyspec API response:', {
-        status: response.status,
+        httpStatus: response.status,
+        responseStatus: response.data?.status,
+        responseMessage: response.data?.message,
         hasToken: !!response.data?.token,
+        fullResponse: JSON.stringify(response.data, null, 2),
       });
 
-      if (response.data.status !== 200 || !response.data.token) {
-        throw new Error(response.data.message || 'Failed to create payment token');
+      // Check response structure - Moneyspec API may return different formats
+      // Expected format: { status: 200, message: "Success", token: "..." }
+      if (response.status === 200) {
+        // Check if response has status field and it's 200
+        if (response.data?.status === 200) {
+          if (response.data.token) {
+            console.log('✅ Payment token received:', response.data.token.substring(0, 20) + '...');
+            return response.data.token;
+          } else {
+            // Status 200 but no token - log full response
+            console.error('❌ Moneyspec API returned status 200 but no token:', JSON.stringify(response.data, null, 2));
+            throw new Error(response.data.message || 'Moneyspec API returned success but no token in response');
+          }
+        } else {
+          // HTTP 200 but API status is not 200
+          console.error('❌ Moneyspec API error response:', JSON.stringify(response.data, null, 2));
+          throw new Error(response.data.message || `Moneyspec API returned status ${response.data?.status || 'unknown'}`);
+        }
+      } else {
+        // HTTP status is not 200
+        throw new Error(response.data?.message || `Moneyspec API returned HTTP status ${response.status}`);
       }
-
-      return response.data.token;
     } catch (error: any) {
       console.error('❌ Create payment token error:', error);
       console.error('Error details:', {
