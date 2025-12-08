@@ -79,167 +79,103 @@ class PaymentService {
   }
 
   /**
-   * Create payment token with Moneyspec
+   * Create payment transaction with Moneyspec
+   * 
+   * Based on Moneyspec API documentation:
+   * - Endpoint: /payment/CreateTransaction/qr
+   * - Method: POST with JSON body (not JWT)
+   * - Required fields: secret_id, secret_key, order_id, amount, payment_type, feeType, success_Url, fail_Url, cancel_Url
    * 
    * @param order - The order to create payment for
-   * @param options - Additional options (customerToken, capture, tokenize)
-   * @param trySatang - If true, try amount in satang instead of THB
-   * @returns Payment token
+   * @param method - Payment method ('qr' or 'card')
+   * @returns Payment response with transaction ID and QR code URL
    */
   async createPaymentToken(
     order: Order,
-    options?: {
-      customerToken?: string;
-      capture?: boolean;
-      tokenize?: boolean;
-    },
-    trySatang: boolean = false
-  ): Promise<string> {
+    method: 'qr' | 'card' = 'qr'
+  ): Promise<{ transactionId: string; qrCodeUrl?: string; paymentUrl?: string }> {
     try {
-      // Prepare JWT payload
-      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+      if (!this.moneyspecSecretId || !this.moneyspecSecretKey) {
+        throw new Error('Moneyspec Secret ID and Secret Key must be configured');
+      }
+
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       
-      // Ensure webhook URL doesn't have /api prefix (webhook.php is at root)
-      const webhookUrl = backendUrl.endsWith('/api') 
-        ? backendUrl.replace('/api', '') + '/webhook.php'
-        : backendUrl + '/webhook.php';
-      
-      // Prepare JWT payload according to Moneyspec API requirements
-      // Ensure amount is a number, not string
-      const amountInTHB = typeof order.total_amount === 'string' 
+      // Prepare amount - must be number with 2 decimal places
+      const amount = typeof order.total_amount === 'string' 
         ? parseFloat(order.total_amount) 
         : Number(order.total_amount);
       
       // Validate amount
-      if (isNaN(amountInTHB) || amountInTHB <= 0) {
+      if (isNaN(amount) || amount <= 0) {
         throw new Error(`Invalid amount: ${order.total_amount}`);
       }
-      
-      // Convert THB to satang (smallest currency unit)
-      // 1 THB = 100 satang
-      // Some APIs expect amount in smallest currency unit (satang)
-      const amountInSatang = Math.round(amountInTHB * 100);
-      
-      // Build JWT payload according to Moneyspec API requirements
-      // Based on 2C2P/Moneyspec pattern: merchantID, invoiceNo, amount, currencyCode
-      const jwtPayload: any = {
-        // Required fields per API documentation
-        merchantID: this.moneyspecSecretId, // Merchant ID (using Secret ID)
-        invoiceNo: order.order_number,      // Unique invoice/order number
-        amount: trySatang ? amountInSatang : amountInTHB, // Try satang if requested
-        currencyCode: 'THB',                 // ISO 4217 currency code
-        description: `Order ${order.order_number}`, // Transaction description
+
+      // Format amount to 2 decimal places
+      const formattedAmount = parseFloat(amount.toFixed(2));
+
+      // Parse customer name into firstname and lastname
+      const nameParts = (order.customer_name || '').trim().split(/\s+/);
+      const firstname = nameParts[0] || '';
+      const lastname = nameParts.slice(1).join(' ') || '';
+
+      // Validate order_id - must be alphanumeric, max 20 chars
+      let orderId = order.order_number.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+      if (!orderId) {
+        // Fallback: use order ID if order_number is invalid
+        orderId = `ORD${order.id}`.substring(0, 20);
+      }
+
+      // Build request body according to Moneyspec API documentation
+      const requestBody: any = {
+        // Required fields
+        secret_id: this.moneyspecSecretId,
+        secret_key: this.moneyspecSecretKey,
+        order_id: orderId,
+        amount: formattedAmount,
+        payment_type: method === 'qr' ? 'qrnone' : 'card', // For QR, use 'qrnone'
+        feeType: 'include', // Merchant pays the fee
+        success_Url: `${frontendUrl}/payment/result?status=success`,
+        fail_Url: `${frontendUrl}/payment/result?status=fail`,
+        cancel_Url: `${frontendUrl}/payment/result?status=cancel`,
+        
+        // Optional but recommended fields
+        firstname: firstname,
+        lastname: lastname,
+        email: order.customer_email || '',
+        phone: order.customer_phone || '',
+        description: `Order ${order.order_number}`,
+        address: [
+          order.shipping_address_line,
+          order.subdistrict,
+          order.district,
+          order.province,
+          order.postal_code
+        ].filter(Boolean).join(', '),
+        language: 'th', // Thai language
       };
-      
-      console.log(`💰 Amount format: ${trySatang ? 'satang' : 'THB'} = ${jwtPayload.amount}`);
-      
-      // Also try with amount in satang as alternative (commented for now)
-      // If main currency doesn't work, we'll try satang
-      // amount: amountInSatang,
-      
-      // Add callback and webhook URLs if provided
-      if (frontendUrl) {
-        jwtPayload.callbackUrl = `${frontendUrl}/payment/result`;
-      }
-      if (webhookUrl) {
-        jwtPayload.webhookUrl = webhookUrl;
-      }
-      
-      // Add optional fields if provided
-      if (options?.customerToken) {
-        jwtPayload.customerToken = options.customerToken;
-      }
-      if (options?.capture !== undefined) {
-        jwtPayload.capture = options.capture;
-      }
-      if (options?.tokenize !== undefined) {
-        jwtPayload.tokenize = options.tokenize;
-      }
-      
-      console.log('📋 JWT Payload prepared:', {
-        orderId: jwtPayload.orderId,
-        amount: jwtPayload.amount,
-        amountType: typeof jwtPayload.amount,
-        callbackUrl: jwtPayload.callbackUrl,
-        webhookUrl: jwtPayload.webhookUrl,
-        payloadKeys: Object.keys(jwtPayload),
+
+      console.log('📋 Moneyspec API request prepared:', {
+        order_id: requestBody.order_id,
+        amount: requestBody.amount,
+        payment_type: requestBody.payment_type,
+        customer: `${requestBody.firstname} ${requestBody.lastname}`,
       });
 
-      console.log('🔑 Generating JWT payload for order:', order.order_number);
-      const payload = this.generateJwtPayload(jwtPayload);
-      console.log('✅ JWT payload generated successfully');
-      console.log('🔍 JWT token (first 50 chars):', payload.substring(0, 50) + '...');
-      
-      // Decode JWT to verify payload (without verification, just to see structure)
-      try {
-        const decoded = jwt.decode(payload, { complete: true });
-        console.log('🔍 Decoded JWT structure:', {
-          header: decoded?.header,
-          payload: decoded?.payload,
-          payloadKeys: decoded?.payload ? Object.keys(decoded.payload as any) : [],
-        });
-      } catch (e) {
-        console.log('⚠️  Could not decode JWT for inspection');
-      }
-
       // Call Moneyspec API
-      const apiUrl = `${this.baseUrl}/merchantapi/v2/api/payment/create`;
+      const apiUrl = `${this.baseUrl}/payment/CreateTransaction/qr`;
       console.log('📡 Calling Moneyspec API:', apiUrl);
       
-      // Try sending JWT in Authorization header first (common pattern)
-      // If that doesn't work, try in body
-      let response;
-      try {
-        // Method 1: JWT in Authorization header
-        console.log('📤 Attempting Method 1: JWT in Authorization header');
-        response = await axios.post(
-          apiUrl,
-          {}, // Empty body
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${payload}`,
-            },
-            timeout: 30000,
-          }
-        );
-        console.log('✅ Method 1 (Authorization header) succeeded');
-      } catch (error: any) {
-        // If Authorization header fails, try in body
-        if (error.response?.status === 400 || error.response?.status === 401) {
-          console.log('⚠️  Method 1 failed, trying Method 2: JWT in body as payload');
-          try {
-            response = await axios.post(
-              apiUrl,
-              { payload }, // JWT in body
-              {
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                timeout: 30000,
-              }
-            );
-            console.log('✅ Method 2 (body payload) succeeded');
-          } catch (error2: any) {
-            // Try Method 3: JWT directly in body (not wrapped)
-            console.log('⚠️  Method 2 failed, trying Method 3: JWT directly in body');
-            response = await axios.post(
-              apiUrl,
-              payload, // JWT as string directly
-              {
-                headers: {
-                  'Content-Type': 'text/plain',
-                },
-                timeout: 30000,
-              }
-            );
-            console.log('✅ Method 3 (direct body) succeeded');
-          }
-        } else {
-          throw error;
+      const response = await axios.post(
+        apiUrl,
+        requestBody,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
         }
-      }
+      );
       
       // Log full response for debugging
       console.log('✅ Moneyspec API response:', {
@@ -248,13 +184,11 @@ class PaymentService {
         fullResponse: JSON.stringify(response.data, null, 2),
       });
 
-      // Handle response - Moneyspec may return array or object
+      // Handle response - Moneyspec returns array
       let responseData: any;
       if (Array.isArray(response.data)) {
-        // If response is array, check first element
         if (response.data.length > 0) {
           responseData = response.data[0];
-          console.log('⚠️  Response is array, using first element:', responseData);
         } else {
           throw new Error('Moneyspec API returned empty array');
         }
@@ -263,38 +197,37 @@ class PaymentService {
       }
 
       // Check for error in response
-      if (responseData.status === 'error' || responseData.status !== 200) {
+      if (responseData.status === 'error') {
         const errorMsg = responseData.description || responseData.message || 'Unknown error from Moneyspec API';
         console.error('❌ Moneyspec API error:', errorMsg);
         console.error('Full error response:', JSON.stringify(responseData, null, 2));
-        
-        // If "Data incorrect" and we haven't tried satang yet, retry with satang
-        if (errorMsg.toLowerCase().includes('data incorrect') && !trySatang) {
-          console.log('🔄 Retrying with amount in satang (smallest currency unit)...');
-          return this.createPaymentToken(order, options, true);
-        }
-        
         throw new Error(`Moneyspec API Error: ${errorMsg}`);
       }
 
-      // Check if token exists
-      if (responseData.token) {
-        console.log('✅ Payment token received:', responseData.token.substring(0, 20) + '...');
-        return responseData.token;
+      // Check for success
+      if (responseData.status === 'success') {
+        console.log('✅ Payment transaction created successfully:', {
+          transactionId: responseData.transaction_ID,
+          hasQrCode: !!responseData.image_qrprom,
+        });
+        
+        return {
+          transactionId: responseData.transaction_ID,
+          qrCodeUrl: responseData.image_qrprom,
+          paymentUrl: responseData.image_qrprom, // QR code URL can be used as payment URL
+        };
       } else {
-        // Success but no token
-        console.error('❌ Moneyspec API returned success but no token:', JSON.stringify(responseData, null, 2));
-        throw new Error(responseData.message || 'Moneyspec API returned success but no token in response');
+        throw new Error(`Unexpected response status: ${responseData.status}`);
       }
     } catch (error: any) {
-      console.error('❌ Create payment token error:', error);
+      console.error('❌ Create payment transaction error:', error);
       console.error('Error details:', {
         message: error.message,
         code: error.code,
         response: error.response?.data,
         status: error.response?.status,
         statusText: error.response?.statusText,
-        url: `${this.baseUrl}/merchantapi/v2/api/payment/create`,
+        url: `${this.baseUrl}/payment/CreateTransaction/qr`,
         hasSecretId: !!this.moneyspecSecretId,
         hasSecretKey: !!this.moneyspecSecretKey,
         secretIdLength: this.moneyspecSecretId?.length || 0,
@@ -302,7 +235,7 @@ class PaymentService {
       });
       
       if (error.response?.data) {
-        const errorMessage = error.response.data.message || 'Failed to create payment token';
+        const errorMessage = error.response.data.message || error.response.data.description || 'Failed to create payment transaction';
         console.error('Moneyspec API error response:', JSON.stringify(error.response.data, null, 2));
         throw new Error(`Moneyspec API Error: ${errorMessage}`);
       }
@@ -315,7 +248,7 @@ class PaymentService {
         throw new Error(`Request timeout when calling Moneyspec API. Please check your network connection.`);
       }
       
-      throw new Error(`Failed to create payment token: ${error.message}`);
+      throw new Error(`Failed to create payment transaction: ${error.message}`);
     }
   }
 
@@ -580,52 +513,41 @@ class PaymentService {
       );
       console.log('✅ Payment record created:', paymentId);
 
-      // Create payment token
-      console.log('🔑 Creating payment token...');
-      let token: string;
+      // Create payment transaction
+      console.log('🔑 Creating payment transaction...');
+      let paymentResult: { transactionId: string; qrCodeUrl?: string; paymentUrl?: string };
       try {
-        token = await this.createPaymentToken(order);
-        console.log('✅ Payment token created:', token.substring(0, 20) + '...');
+        paymentResult = await this.createPaymentToken(order, method);
+        console.log('✅ Payment transaction created:', {
+          transactionId: paymentResult.transactionId,
+          hasQrCode: !!paymentResult.qrCodeUrl,
+        });
       } catch (tokenError: any) {
-        console.error('❌ Failed to create payment token:', tokenError);
-        // If token creation fails, use fallback mode
-        console.warn('⚠️  Falling back to fallback mode due to token creation error');
+        console.error('❌ Failed to create payment transaction:', tokenError);
+        // If transaction creation fails, use fallback mode
+        console.warn('⚠️  Falling back to fallback mode due to transaction creation error');
         return this.createPaymentFallback(order, method);
       }
 
-      // Get payment options
-      console.log('📋 Getting payment options...');
-      let options: any;
-      try {
-        options = await this.getPaymentOptions(token);
-        console.log('✅ Payment options retrieved');
-      } catch (optionsError: any) {
-        console.error('❌ Failed to get payment options:', optionsError);
-        // Continue without options - frontend can still use the token
-        options = null;
-      }
-
-      // For card payment, we need to return the token and options for frontend to handle
-      // For TMW (QR), we can initiate the payment flow
+      // Return payment response based on method
       if (method === 'qr') {
-        // TMW payment flow
-        // Note: This requires phone number, which should be collected from customer
-        // For now, return the token and options for frontend to handle
+        // QR payment - return QR code URL
+        const paymentUrl: string = paymentResult.paymentUrl || paymentResult.qrCodeUrl || '';
+        if (!paymentUrl) {
+          throw new Error('QR code URL not returned from Moneyspec API');
+        }
         return {
-          paymentUrl: `${this.baseUrl}/merchantapi/v2/payment?token=${token}`,
-          qrCode: undefined, // TMW uses OTP flow, not QR code
-          transactionId: token,
-          token, // Include token for frontend to use
-          options, // Include options for frontend
+          paymentUrl: paymentUrl,
+          qrCode: paymentResult.qrCodeUrl,
+          transactionId: paymentResult.transactionId,
         };
       } else {
-        // Card payment - return token and options for frontend to handle card input
+        // Card payment - return payment URL (if available)
+        const paymentUrl: string = paymentResult.paymentUrl || `${this.baseUrl}/payment?transaction=${paymentResult.transactionId}`;
         return {
-          paymentUrl: `${this.baseUrl}/merchantapi/v2/payment?token=${token}`,
+          paymentUrl: paymentUrl,
           qrCode: undefined,
-          transactionId: token,
-          token, // Include token for frontend to use
-          options, // Include options for frontend to select bank and card type
+          transactionId: paymentResult.transactionId,
         };
       }
     } catch (error: any) {
