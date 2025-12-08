@@ -83,6 +83,7 @@ class PaymentService {
    * 
    * @param order - The order to create payment for
    * @param options - Additional options (customerToken, capture, tokenize)
+   * @param trySatang - If true, try amount in satang instead of THB
    * @returns Payment token
    */
   async createPaymentToken(
@@ -91,7 +92,8 @@ class PaymentService {
       customerToken?: string;
       capture?: boolean;
       tokenize?: boolean;
-    }
+    },
+    trySatang: boolean = false
   ): Promise<string> {
     try {
       // Prepare JWT payload
@@ -105,30 +107,36 @@ class PaymentService {
       
       // Prepare JWT payload according to Moneyspec API requirements
       // Ensure amount is a number, not string
-      const amount = typeof order.total_amount === 'string' 
+      const amountInTHB = typeof order.total_amount === 'string' 
         ? parseFloat(order.total_amount) 
         : Number(order.total_amount);
       
       // Validate amount
-      if (isNaN(amount) || amount <= 0) {
+      if (isNaN(amountInTHB) || amountInTHB <= 0) {
         throw new Error(`Invalid amount: ${order.total_amount}`);
       }
       
+      // Convert THB to satang (smallest currency unit)
+      // 1 THB = 100 satang
+      // Some APIs expect amount in smallest currency unit (satang)
+      const amountInSatang = Math.round(amountInTHB * 100);
+      
       // Build JWT payload according to Moneyspec API requirements
-      // Try multiple payload structures to find the correct one
+      // Based on 2C2P/Moneyspec pattern: merchantID, invoiceNo, amount, currencyCode
       const jwtPayload: any = {
-        // Common payment fields
-        invoiceNo: order.order_number, // Try invoiceNo instead of orderId
-        orderId: order.order_number,   // Also include orderId for compatibility
-        amount: amount,
-        description: `Order ${order.order_number}`,
-        currencyCode: 'THB', // Thai Baht - required for Thai payments
+        // Required fields per API documentation
+        merchantID: this.moneyspecSecretId, // Merchant ID (using Secret ID)
+        invoiceNo: order.order_number,      // Unique invoice/order number
+        amount: trySatang ? amountInSatang : amountInTHB, // Try satang if requested
+        currencyCode: 'THB',                 // ISO 4217 currency code
+        description: `Order ${order.order_number}`, // Transaction description
       };
       
-      // Add merchant ID if available (Secret ID might be merchant ID)
-      if (this.moneyspecSecretId) {
-        jwtPayload.merchantID = this.moneyspecSecretId;
-      }
+      console.log(`💰 Amount format: ${trySatang ? 'satang' : 'THB'} = ${jwtPayload.amount}`);
+      
+      // Also try with amount in satang as alternative (commented for now)
+      // If main currency doesn't work, we'll try satang
+      // amount: amountInSatang,
       
       // Add callback and webhook URLs if provided
       if (frontendUrl) {
@@ -162,6 +170,18 @@ class PaymentService {
       const payload = this.generateJwtPayload(jwtPayload);
       console.log('✅ JWT payload generated successfully');
       console.log('🔍 JWT token (first 50 chars):', payload.substring(0, 50) + '...');
+      
+      // Decode JWT to verify payload (without verification, just to see structure)
+      try {
+        const decoded = jwt.decode(payload, { complete: true });
+        console.log('🔍 Decoded JWT structure:', {
+          header: decoded?.header,
+          payload: decoded?.payload,
+          payloadKeys: decoded?.payload ? Object.keys(decoded.payload as any) : [],
+        });
+      } catch (e) {
+        console.log('⚠️  Could not decode JWT for inspection');
+      }
 
       // Call Moneyspec API
       const apiUrl = `${this.baseUrl}/merchantapi/v2/api/payment/create`;
@@ -247,6 +267,13 @@ class PaymentService {
         const errorMsg = responseData.description || responseData.message || 'Unknown error from Moneyspec API';
         console.error('❌ Moneyspec API error:', errorMsg);
         console.error('Full error response:', JSON.stringify(responseData, null, 2));
+        
+        // If "Data incorrect" and we haven't tried satang yet, retry with satang
+        if (errorMsg.toLowerCase().includes('data incorrect') && !trySatang) {
+          console.log('🔄 Retrying with amount in satang (smallest currency unit)...');
+          return this.createPaymentToken(order, options, true);
+        }
+        
         throw new Error(`Moneyspec API Error: ${errorMsg}`);
       }
 
