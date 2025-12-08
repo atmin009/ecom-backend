@@ -127,13 +127,15 @@ class PaymentService {
       }
 
       // Build request body according to Moneyspec API documentation
+      // Note: /payment/CreateTransaction/qr endpoint is for QR payments only
+      // For card payments, a different endpoint/flow may be needed
       const requestBody: any = {
         // Required fields
         secret_id: this.moneyspecSecretId,
         secret_key: this.moneyspecSecretKey,
         order_id: orderId,
         amount: formattedAmount,
-        payment_type: method === 'qr' ? 'qrnone' : 'card', // For QR, use 'qrnone'
+        payment_type: 'qrnone', // This endpoint only supports 'qrnone' for QR payments
         feeType: 'include', // Merchant pays the fee
         success_Url: `${frontendUrl}/payment/result?status=success`,
         fail_Url: `${frontendUrl}/payment/result?status=fail`,
@@ -154,6 +156,13 @@ class PaymentService {
         ].filter(Boolean).join(', '),
         language: 'th', // Thai language
       };
+      
+      // Remove empty optional fields to avoid validation errors
+      if (!requestBody.firstname) delete requestBody.firstname;
+      if (!requestBody.lastname) delete requestBody.lastname;
+      if (!requestBody.email) delete requestBody.email;
+      if (!requestBody.phone) delete requestBody.phone;
+      if (!requestBody.address) delete requestBody.address;
 
       console.log('📋 Moneyspec API request prepared:', {
         order_id: requestBody.order_id,
@@ -161,8 +170,21 @@ class PaymentService {
         payment_type: requestBody.payment_type,
         customer: `${requestBody.firstname} ${requestBody.lastname}`,
       });
+      
+      // Log full request body (without secret_key for security)
+      const logBody = { ...requestBody };
+      if (logBody.secret_key) {
+        logBody.secret_key = '***HIDDEN***';
+      }
+      console.log('📤 Full request body (secret_key hidden):', JSON.stringify(logBody, null, 2));
 
       // Call Moneyspec API
+      // Note: This endpoint is for QR payments only
+      // For card payments, a different endpoint/flow may be needed
+      if (method !== 'qr') {
+        throw new Error('Card payment method not yet supported. Please use QR payment method.');
+      }
+      
       const apiUrl = `${this.baseUrl}/payment/CreateTransaction/qr`;
       console.log('📡 Calling Moneyspec API:', apiUrl);
       
