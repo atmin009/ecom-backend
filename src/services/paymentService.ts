@@ -114,12 +114,21 @@ class PaymentService {
         throw new Error(`Invalid amount: ${order.total_amount}`);
       }
       
-      // Build JWT payload - check Moneyspec documentation for exact field names
+      // Build JWT payload according to Moneyspec API requirements
+      // Try multiple payload structures to find the correct one
       const jwtPayload: any = {
-        orderId: order.order_number,
+        // Common payment fields
+        invoiceNo: order.order_number, // Try invoiceNo instead of orderId
+        orderId: order.order_number,   // Also include orderId for compatibility
         amount: amount,
         description: `Order ${order.order_number}`,
+        currencyCode: 'THB', // Thai Baht - required for Thai payments
       };
+      
+      // Add merchant ID if available (Secret ID might be merchant ID)
+      if (this.moneyspecSecretId) {
+        jwtPayload.merchantID = this.moneyspecSecretId;
+      }
       
       // Add callback and webhook URLs if provided
       if (frontendUrl) {
@@ -152,21 +161,65 @@ class PaymentService {
       console.log('🔑 Generating JWT payload for order:', order.order_number);
       const payload = this.generateJwtPayload(jwtPayload);
       console.log('✅ JWT payload generated successfully');
+      console.log('🔍 JWT token (first 50 chars):', payload.substring(0, 50) + '...');
 
       // Call Moneyspec API
       const apiUrl = `${this.baseUrl}/merchantapi/v2/api/payment/create`;
       console.log('📡 Calling Moneyspec API:', apiUrl);
       
-      const response = await axios.post(
-        apiUrl,
-        { payload },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          timeout: 30000, // 30 seconds timeout
+      // Try sending JWT in Authorization header first (common pattern)
+      // If that doesn't work, try in body
+      let response;
+      try {
+        // Method 1: JWT in Authorization header
+        console.log('📤 Attempting Method 1: JWT in Authorization header');
+        response = await axios.post(
+          apiUrl,
+          {}, // Empty body
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${payload}`,
+            },
+            timeout: 30000,
+          }
+        );
+        console.log('✅ Method 1 (Authorization header) succeeded');
+      } catch (error: any) {
+        // If Authorization header fails, try in body
+        if (error.response?.status === 400 || error.response?.status === 401) {
+          console.log('⚠️  Method 1 failed, trying Method 2: JWT in body as payload');
+          try {
+            response = await axios.post(
+              apiUrl,
+              { payload }, // JWT in body
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+              }
+            );
+            console.log('✅ Method 2 (body payload) succeeded');
+          } catch (error2: any) {
+            // Try Method 3: JWT directly in body (not wrapped)
+            console.log('⚠️  Method 2 failed, trying Method 3: JWT directly in body');
+            response = await axios.post(
+              apiUrl,
+              payload, // JWT as string directly
+              {
+                headers: {
+                  'Content-Type': 'text/plain',
+                },
+                timeout: 30000,
+              }
+            );
+            console.log('✅ Method 3 (direct body) succeeded');
+          }
+        } else {
+          throw error;
         }
-      );
+      }
       
       // Log full response for debugging
       console.log('✅ Moneyspec API response:', {
