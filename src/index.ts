@@ -48,6 +48,11 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging middleware (for debugging) - must be before routes
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`  Headers:`, {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    'user-agent': req.headers['user-agent'],
+  });
   next();
 });
 
