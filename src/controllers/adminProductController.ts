@@ -128,8 +128,8 @@ export const getAdminProducts = asyncHandler(async (req: Request, res: Response)
 
   console.log('Admin Products Response:', {
     success: response.success,
-    productsCount: response.data.products.length,
-    pagination: response.data.pagination,
+    productsCount: response.data?.products.length || 0,
+    pagination: response.data?.pagination,
   });
 
   res.json(response);

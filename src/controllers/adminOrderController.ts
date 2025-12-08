@@ -107,8 +107,8 @@ export const getAdminOrders = asyncHandler(async (req: Request, res: Response) =
 
   console.log('Admin Orders Response:', {
     success: response.success,
-    ordersCount: response.data.orders.length,
-    pagination: response.data.pagination,
+    ordersCount: response.data?.orders.length || 0,
+    pagination: response.data?.pagination,
   });
 
   res.json(response);

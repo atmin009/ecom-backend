@@ -78,8 +78,8 @@ export const getAdminPromotions = asyncHandler(async (req: Request, res: Respons
 
   console.log('Admin Promotions Response:', {
     success: response.success,
-    promotionsCount: response.data.promotions.length,
-    pagination: response.data.pagination,
+    promotionsCount: response.data?.promotions.length || 0,
+    pagination: response.data?.pagination,
   });
 
   res.json(response);

@@ -14,8 +14,8 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       p.id, p.name, p.sku, p.price, p.description_short, p.description_long, 
       p.image_url, p.is_active, p.is_free_gift, p.category_id, p.brand_id,
       p.device_model, p.film_type, p.screen_size, p.thickness, p.hardness, p.features,
-      c.id as category_id_full, c.name as category_name, c.name_en as category_name_en,
-      b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en
+      c.id as category_id_full, c.name as category_name, c.name_en as category_name_en, c.is_active as category_is_active,
+      b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en, b.is_active as brand_is_active
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN brands b ON p.brand_id = b.id
@@ -83,11 +83,13 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       id: row.category_id_full,
       name: row.category_name,
       name_en: row.category_name_en,
+      is_active: row.category_is_active ?? true,
     } : undefined,
     brand: row.brand_id ? {
       id: row.brand_id_full,
       name: row.brand_name,
       name_en: row.brand_name_en,
+      is_active: row.brand_is_active ?? true,
     } : undefined,
   }));
 
@@ -110,8 +112,8 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
       p.id, p.name, p.sku, p.price, p.description_short, p.description_long, 
       p.image_url, p.is_active, p.is_free_gift, p.category_id, p.brand_id,
       p.device_model, p.film_type, p.screen_size, p.thickness, p.hardness, p.features,
-      c.id as category_id_full, c.name as category_name, c.name_en as category_name_en,
-      b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en
+      c.id as category_id_full, c.name as category_name, c.name_en as category_name_en, c.is_active as category_is_active,
+      b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en, b.is_active as brand_is_active
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN brands b ON p.brand_id = b.id
@@ -149,11 +151,13 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
       id: row.category_id_full,
       name: row.category_name,
       name_en: row.category_name_en,
+      is_active: row.category_is_active ?? true,
     } : undefined,
     brand: row.brand_id ? {
       id: row.brand_id_full,
       name: row.brand_name,
       name_en: row.brand_name_en,
+      is_active: row.brand_is_active ?? true,
     } : undefined,
   };
 
