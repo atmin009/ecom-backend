@@ -142,6 +142,8 @@ export interface PaymentResponse {
   transactionId?: string;
   token?: string; // Moneyspec payment token
   options?: any; // Payment options from Moneyspec API
+  isFallback?: boolean; // Flag indicating fallback mode
+  message?: string; // Additional message (e.g., error or warning)
 }
 
 // SMS types

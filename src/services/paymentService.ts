@@ -452,17 +452,18 @@ class PaymentService {
       order.total_amount
     );
 
-    // Return mock payment URL for development
+    // Return fallback response with warning message
     const mockToken = `MOCK-${paymentId}-${Date.now()}`;
-    const mockPaymentUrl = method === 'qr'
-      ? `${this.baseUrl}/merchantapi/v2/payment?token=${mockToken}`
-      : `${this.baseUrl}/merchantapi/v2/payment?token=${mockToken}`;
-
+    
+    // Don't return a real payment URL in fallback mode
+    // Instead, return a flag indicating fallback mode
     return {
-      paymentUrl: mockPaymentUrl,
-      qrCode: method === 'qr' ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${mockPaymentUrl}` : undefined,
+      paymentUrl: '', // Empty URL to prevent redirect
+      qrCode: undefined,
       transactionId: mockToken,
       token: mockToken,
+      isFallback: true, // Flag to indicate fallback mode
+      message: 'Moneyspec credentials not configured. Please set MONEYSPEC_SECRET_ID and MONEYSPEC_SECRET_KEY in .env file.',
     };
   }
 
