@@ -36,10 +36,11 @@ class PaymentService {
 
   constructor() {
     // Moneyspec configuration
-    this.moneyspecSecretId = process.env.MONEYSPEC_SECRET_ID || '';
-    this.moneyspecSecretKey = process.env.MONEYSPEC_SECRET_KEY || '';
+    // Support both MONEYSPEC_* and MONEYSPACE_* for backward compatibility
+    this.moneyspecSecretId = process.env.MONEYSPEC_SECRET_ID || process.env.MONEYSPACE_SECRET_ID || '';
+    this.moneyspecSecretKey = process.env.MONEYSPEC_SECRET_KEY || process.env.MONEYSPACE_SECRET_KEY || '';
     // Moneyspec API base URL (sandbox or production)
-    this.baseUrl = process.env.MONEYSPEC_BASE_URL || 'https://stage.moneysp.net';
+    this.baseUrl = process.env.MONEYSPEC_BASE_URL || process.env.MONEYSPACE_BASE_URL || 'https://a.moneyspace.net';
   }
 
   /**
@@ -50,7 +51,7 @@ class PaymentService {
    */
   private generateJwtPayload(payload: any): string {
     if (!this.moneyspecSecretId || !this.moneyspecSecretKey) {
-      throw new Error('Moneyspec Secret ID and Secret Key must be configured. Please set MONEYSPEC_SECRET_ID and MONEYSPEC_SECRET_KEY in .env file.');
+      throw new Error('Moneyspec Secret ID and Secret Key must be configured. Please set MONEYSPEC_SECRET_ID (or MONEYSPACE_SECRET_ID) and MONEYSPEC_SECRET_KEY (or MONEYSPACE_SECRET_KEY) in .env file.');
     }
 
     try {
@@ -455,15 +456,15 @@ class PaymentService {
     // Return fallback response with warning message
     const mockToken = `MOCK-${paymentId}-${Date.now()}`;
     
-    // Don't return a real payment URL in fallback mode
-    // Instead, return a flag indicating fallback mode
+    console.warn('⚠️  Payment created in fallback mode. Moneyspec credentials not configured.');
+    console.warn('⚠️  To enable real payments, set MONEYSPEC_SECRET_ID (or MONEYSPACE_SECRET_ID) and MONEYSPEC_SECRET_KEY (or MONEYSPACE_SECRET_KEY) in .env file.');
+    
+    // Return fallback response - use a placeholder URL that won't redirect
     return {
-      paymentUrl: '', // Empty URL to prevent redirect
+      paymentUrl: `#fallback-${mockToken}`, // Use hash to prevent actual redirect
       qrCode: undefined,
       transactionId: mockToken,
       token: mockToken,
-      isFallback: true, // Flag to indicate fallback mode
-      message: 'Moneyspec credentials not configured. Please set MONEYSPEC_SECRET_ID and MONEYSPEC_SECRET_KEY in .env file.',
     };
   }
 
