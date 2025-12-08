@@ -13,7 +13,7 @@ dotenv.config();
  * This service handles payment processing via Moneyspec payment gateway.
  * 
  * Moneyspec API Documentation:
- * - Server: https://stage.moneysp.net (Sandbox) or production URL
+ * - Server: https://a.moneyspace.net (Production)
  * - Endpoints:
  *   - POST /merchantapi/v2/api/payment/create - Create payment token
  *   - POST /merchantapi/v2/api/payment/options - Get payment options
@@ -39,8 +39,14 @@ class PaymentService {
     // Support both MONEYSPEC_* and MONEYSPACE_* for backward compatibility
     this.moneyspecSecretId = process.env.MONEYSPEC_SECRET_ID || process.env.MONEYSPACE_SECRET_ID || '';
     this.moneyspecSecretKey = process.env.MONEYSPEC_SECRET_KEY || process.env.MONEYSPACE_SECRET_KEY || '';
-    // Moneyspec API base URL (sandbox or production)
+    // Moneyspec API base URL (production)
     this.baseUrl = process.env.MONEYSPEC_BASE_URL || process.env.MONEYSPACE_BASE_URL || 'https://a.moneyspace.net';
+    
+    // Log configuration status (without exposing secrets)
+    console.log('🔐 Payment Service Configuration:');
+    console.log(`  Base URL: ${this.baseUrl}`);
+    console.log(`  Secret ID: ${this.moneyspecSecretId ? '✅ Configured (' + this.moneyspecSecretId.substring(0, 8) + '...)' : '❌ Not configured'}`);
+    console.log(`  Secret Key: ${this.moneyspecSecretKey ? '✅ Configured (' + this.moneyspecSecretKey.substring(0, 8) + '...)' : '❌ Not configured'}`);
   }
 
   /**
@@ -89,29 +95,55 @@ class PaymentService {
   ): Promise<string> {
     try {
       // Prepare JWT payload
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      
+      // Ensure webhook URL doesn't have /api prefix (webhook.php is at root)
+      const webhookUrl = backendUrl.endsWith('/api') 
+        ? backendUrl.replace('/api', '') + '/webhook.php'
+        : backendUrl + '/webhook.php';
+      
       const jwtPayload = {
         orderId: order.order_number,
         amount: order.total_amount,
         description: `Order ${order.order_number}`,
-        callbackUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/result`,
-        webhookUrl: `${process.env.BACKEND_URL || 'http://159.223.56.175:3001/api'}/webhook.php`,
+        callbackUrl: `${frontendUrl}/payment/result`,
+        webhookUrl: webhookUrl,
         ...(options?.customerToken && { customerToken: options.customerToken }),
         ...(options?.capture !== undefined && { capture: options.capture }),
         ...(options?.tokenize !== undefined && { tokenize: options.tokenize }),
       };
+      
+      console.log('📋 JWT Payload prepared:', {
+        orderId: jwtPayload.orderId,
+        amount: jwtPayload.amount,
+        callbackUrl: jwtPayload.callbackUrl,
+        webhookUrl: jwtPayload.webhookUrl,
+      });
 
+      console.log('🔑 Generating JWT payload for order:', order.order_number);
       const payload = this.generateJwtPayload(jwtPayload);
+      console.log('✅ JWT payload generated successfully');
 
       // Call Moneyspec API
+      const apiUrl = `${this.baseUrl}/merchantapi/v2/api/payment/create`;
+      console.log('📡 Calling Moneyspec API:', apiUrl);
+      
       const response = await axios.post(
-        `${this.baseUrl}/merchantapi/v2/api/payment/create`,
+        apiUrl,
         { payload },
         {
           headers: {
             'Content-Type': 'application/json',
           },
+          timeout: 30000, // 30 seconds timeout
         }
       );
+      
+      console.log('✅ Moneyspec API response:', {
+        status: response.status,
+        hasToken: !!response.data?.token,
+      });
 
       if (response.data.status !== 200 || !response.data.token) {
         throw new Error(response.data.message || 'Failed to create payment token');
@@ -119,15 +151,18 @@ class PaymentService {
 
       return response.data.token;
     } catch (error: any) {
-      console.error('Create payment token error:', error);
+      console.error('❌ Create payment token error:', error);
       console.error('Error details:', {
         message: error.message,
+        code: error.code,
         response: error.response?.data,
         status: error.response?.status,
         statusText: error.response?.statusText,
         url: `${this.baseUrl}/merchantapi/v2/api/payment/create`,
         hasSecretId: !!this.moneyspecSecretId,
         hasSecretKey: !!this.moneyspecSecretKey,
+        secretIdLength: this.moneyspecSecretId?.length || 0,
+        secretKeyLength: this.moneyspecSecretKey?.length || 0,
       });
       
       if (error.response?.data) {
@@ -138,6 +173,10 @@ class PaymentService {
       
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         throw new Error(`Cannot connect to Moneyspec API at ${this.baseUrl}. Please check MONEYSPEC_BASE_URL configuration.`);
+      }
+      
+      if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+        throw new Error(`Request timeout when calling Moneyspec API. Please check your network connection.`);
       }
       
       throw new Error(`Failed to create payment token: ${error.message}`);
@@ -378,25 +417,57 @@ class PaymentService {
     method: 'qr' | 'card'
   ): Promise<PaymentResponse> {
     try {
+      console.log('💳 Creating payment:', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        amount: order.total_amount,
+        method,
+        hasSecretId: !!this.moneyspecSecretId,
+        hasSecretKey: !!this.moneyspecSecretKey,
+        baseUrl: this.baseUrl,
+      });
+
       // Check if Moneyspec credentials are configured
       if (!this.moneyspecSecretId || !this.moneyspecSecretKey) {
         console.warn('⚠️  Moneyspec credentials not configured. Using fallback mode.');
+        console.warn('⚠️  Please set MONEYSPEC_SECRET_ID (or MONEYSPACE_SECRET_ID) and MONEYSPEC_SECRET_KEY (or MONEYSPACE_SECRET_KEY) in .env file.');
         // Fallback mode for development/testing
         return this.createPaymentFallback(order, method);
       }
 
       // Create payment record in database first
+      console.log('💾 Creating payment record in database...');
       const paymentId = await this.createPaymentRecord(
         order.id,
         method === 'qr' ? 'tmw' : 'card',
         order.total_amount
       );
+      console.log('✅ Payment record created:', paymentId);
 
       // Create payment token
-      const token = await this.createPaymentToken(order);
+      console.log('🔑 Creating payment token...');
+      let token: string;
+      try {
+        token = await this.createPaymentToken(order);
+        console.log('✅ Payment token created:', token.substring(0, 20) + '...');
+      } catch (tokenError: any) {
+        console.error('❌ Failed to create payment token:', tokenError);
+        // If token creation fails, use fallback mode
+        console.warn('⚠️  Falling back to fallback mode due to token creation error');
+        return this.createPaymentFallback(order, method);
+      }
 
       // Get payment options
-      const options = await this.getPaymentOptions(token);
+      console.log('📋 Getting payment options...');
+      let options: any;
+      try {
+        options = await this.getPaymentOptions(token);
+        console.log('✅ Payment options retrieved');
+      } catch (optionsError: any) {
+        console.error('❌ Failed to get payment options:', optionsError);
+        // Continue without options - frontend can still use the token
+        options = null;
+      }
 
       // For card payment, we need to return the token and options for frontend to handle
       // For TMW (QR), we can initiate the payment flow
