@@ -103,22 +103,50 @@ class PaymentService {
         ? backendUrl.replace('/api', '') + '/webhook.php'
         : backendUrl + '/webhook.php';
       
-      const jwtPayload = {
+      // Prepare JWT payload according to Moneyspec API requirements
+      // Ensure amount is a number, not string
+      const amount = typeof order.total_amount === 'string' 
+        ? parseFloat(order.total_amount) 
+        : Number(order.total_amount);
+      
+      // Validate amount
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error(`Invalid amount: ${order.total_amount}`);
+      }
+      
+      // Build JWT payload - check Moneyspec documentation for exact field names
+      const jwtPayload: any = {
         orderId: order.order_number,
-        amount: order.total_amount,
+        amount: amount,
         description: `Order ${order.order_number}`,
-        callbackUrl: `${frontendUrl}/payment/result`,
-        webhookUrl: webhookUrl,
-        ...(options?.customerToken && { customerToken: options.customerToken }),
-        ...(options?.capture !== undefined && { capture: options.capture }),
-        ...(options?.tokenize !== undefined && { tokenize: options.tokenize }),
       };
+      
+      // Add callback and webhook URLs if provided
+      if (frontendUrl) {
+        jwtPayload.callbackUrl = `${frontendUrl}/payment/result`;
+      }
+      if (webhookUrl) {
+        jwtPayload.webhookUrl = webhookUrl;
+      }
+      
+      // Add optional fields if provided
+      if (options?.customerToken) {
+        jwtPayload.customerToken = options.customerToken;
+      }
+      if (options?.capture !== undefined) {
+        jwtPayload.capture = options.capture;
+      }
+      if (options?.tokenize !== undefined) {
+        jwtPayload.tokenize = options.tokenize;
+      }
       
       console.log('📋 JWT Payload prepared:', {
         orderId: jwtPayload.orderId,
         amount: jwtPayload.amount,
+        amountType: typeof jwtPayload.amount,
         callbackUrl: jwtPayload.callbackUrl,
         webhookUrl: jwtPayload.webhookUrl,
+        payloadKeys: Object.keys(jwtPayload),
       });
 
       console.log('🔑 Generating JWT payload for order:', order.order_number);
@@ -143,33 +171,40 @@ class PaymentService {
       // Log full response for debugging
       console.log('✅ Moneyspec API response:', {
         httpStatus: response.status,
-        responseStatus: response.data?.status,
-        responseMessage: response.data?.message,
-        hasToken: !!response.data?.token,
+        responseType: Array.isArray(response.data) ? 'array' : typeof response.data,
         fullResponse: JSON.stringify(response.data, null, 2),
       });
 
-      // Check response structure - Moneyspec API may return different formats
-      // Expected format: { status: 200, message: "Success", token: "..." }
-      if (response.status === 200) {
-        // Check if response has status field and it's 200
-        if (response.data?.status === 200) {
-          if (response.data.token) {
-            console.log('✅ Payment token received:', response.data.token.substring(0, 20) + '...');
-            return response.data.token;
-          } else {
-            // Status 200 but no token - log full response
-            console.error('❌ Moneyspec API returned status 200 but no token:', JSON.stringify(response.data, null, 2));
-            throw new Error(response.data.message || 'Moneyspec API returned success but no token in response');
-          }
+      // Handle response - Moneyspec may return array or object
+      let responseData: any;
+      if (Array.isArray(response.data)) {
+        // If response is array, check first element
+        if (response.data.length > 0) {
+          responseData = response.data[0];
+          console.log('⚠️  Response is array, using first element:', responseData);
         } else {
-          // HTTP 200 but API status is not 200
-          console.error('❌ Moneyspec API error response:', JSON.stringify(response.data, null, 2));
-          throw new Error(response.data.message || `Moneyspec API returned status ${response.data?.status || 'unknown'}`);
+          throw new Error('Moneyspec API returned empty array');
         }
       } else {
-        // HTTP status is not 200
-        throw new Error(response.data?.message || `Moneyspec API returned HTTP status ${response.status}`);
+        responseData = response.data;
+      }
+
+      // Check for error in response
+      if (responseData.status === 'error' || responseData.status !== 200) {
+        const errorMsg = responseData.description || responseData.message || 'Unknown error from Moneyspec API';
+        console.error('❌ Moneyspec API error:', errorMsg);
+        console.error('Full error response:', JSON.stringify(responseData, null, 2));
+        throw new Error(`Moneyspec API Error: ${errorMsg}`);
+      }
+
+      // Check if token exists
+      if (responseData.token) {
+        console.log('✅ Payment token received:', responseData.token.substring(0, 20) + '...');
+        return responseData.token;
+      } else {
+        // Success but no token
+        console.error('❌ Moneyspec API returned success but no token:', JSON.stringify(responseData, null, 2));
+        throw new Error(responseData.message || 'Moneyspec API returned success but no token in response');
       }
     } catch (error: any) {
       console.error('❌ Create payment token error:', error);

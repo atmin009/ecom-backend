@@ -15,6 +15,10 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+  // Convert DECIMAL to number instead of string
+  decimalNumbers: true,
+  supportBigNumbers: true,
+  bigNumberStrings: false,
 });
 
 // Test connection
