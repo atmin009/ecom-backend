@@ -7,10 +7,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install ALL dependencies (including devDependencies for building)
 # Using npm install instead of npm ci to avoid integrity checksum issues
-# npm ci requires exact match with package-lock.json integrity checksums
-RUN npm install --only=production --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 # Copy TypeScript config
 COPY tsconfig.json ./
@@ -20,6 +19,9 @@ COPY src ./src
 
 # Build TypeScript
 RUN npm run build
+
+# Remove devDependencies after build to reduce image size
+RUN npm prune --production
 
 # Expose port
 EXPOSE 3001
