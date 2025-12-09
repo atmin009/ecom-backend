@@ -462,11 +462,36 @@ class PaymentService {
       console.log('💰 [Webhook Handler] Payment status check:', {
         originalStatus: status,
         isPaymentSuccess,
-        willSendSMS: isPaymentSuccess,
+        paymentStatus: paymentStatus,
+        orderPaymentStatus: orderPaymentStatus,
+        willSendSMS: isPaymentSuccess && paymentStatus === 'success',
       });
 
-      if (isPaymentSuccess) {
-        console.log('✅ [Payment Webhook] Payment successful, preparing to send SMS...');
+      // Only send SMS if payment is actually successful AND order status was updated to 'paid'
+      // This prevents sending SMS multiple times or before payment is confirmed
+      if (isPaymentSuccess && paymentStatus === 'success' && orderPaymentStatus === 'paid') {
+        // Double-check that order is actually paid in database
+        const orderCheckResult = await query(
+          `SELECT customer_phone, order_number, payment_status FROM orders WHERE id = ?`,
+          [orderId]
+        );
+        
+        if (orderCheckResult.rows.length === 0) {
+          console.error('❌ [Payment Webhook] Order not found when checking payment status');
+          return { success: true, orderId };
+        }
+
+        const currentOrderStatus = orderCheckResult.rows[0].payment_status;
+        if (currentOrderStatus !== 'paid') {
+          console.warn('⚠️  [Payment Webhook] Order payment_status is not "paid", skipping SMS:', {
+            orderId,
+            currentStatus: currentOrderStatus,
+            expectedStatus: 'paid',
+          });
+          return { success: true, orderId };
+        }
+
+        console.log('✅ [Payment Webhook] Payment confirmed successful, preparing to send SMS...');
         const orderResult = await query(
           `SELECT customer_phone, order_number FROM orders WHERE id = ?`,
           [orderId]

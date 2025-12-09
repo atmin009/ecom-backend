@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import iconv from 'iconv-lite';
 
 dotenv.config();
 
@@ -87,22 +88,36 @@ class MailbitSmsService {
         messageLength: message.length,
       });
 
+      // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
+      // This is required for MailBIT API v2 to display Thai characters correctly
+      let encodedMessage: string;
+      try {
+        // Convert UTF-8 string to TIS-620 buffer, then to URL-encoded string
+        const tis620Buffer = iconv.encode(message, 'tis620');
+        // URL encode the TIS-620 encoded message
+        encodedMessage = encodeURIComponent(tis620Buffer.toString('binary'));
+        console.log('✅ [MailBIT SMS] Message converted to TIS-620 encoding');
+      } catch (encodingError: any) {
+        console.warn('⚠️  [MailBIT SMS] TIS-620 encoding failed, falling back to UTF-8:', encodingError.message);
+        // Fallback to UTF-8 if TIS-620 encoding fails
+        encodedMessage = encodeURIComponent(message);
+      }
+
       // Build API URL with query parameters (GET request like the PHP example)
       // Format: http://dplus.mailbit.co.th/api/v2/SendSMS?ApiKey=...&ClientId=...&SenderId=...&message=...&mobileNumbers=...&fl=0
-      // Note: URLSearchParams will automatically URL-encode the message (UTF-8)
-      // PHP example uses iconv("UTF-8", "TIS-620") but UTF-8 URL encoding should work fine
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS`;
       
-      const params = new URLSearchParams({
-        ApiKey: this.apiKey,
-        ClientId: this.clientId,
-        SenderId: this.senderId,
-        message: message, // URLSearchParams will URL-encode this automatically
-        mobileNumbers: phone,
-        fl: '0', // fl=0 for normal SMS (not flash message)
-      });
+      // Build query string manually to use TIS-620 encoded message
+      const queryParams = [
+        `ApiKey=${encodeURIComponent(this.apiKey)}`,
+        `ClientId=${encodeURIComponent(this.clientId)}`,
+        `SenderId=${encodeURIComponent(this.senderId)}`,
+        `message=${encodedMessage}`,
+        `mobileNumbers=${encodeURIComponent(phone)}`,
+        `fl=0`,
+      ].join('&');
 
-      const fullUrl = `${apiUrl}?${params.toString()}`;
+      const fullUrl = `${apiUrl}?${queryParams}`;
       
       console.log('🔗 [MailBIT SMS] Full URL (message encoded):', fullUrl.replace(/message=[^&]+/, 'message=***ENCODED***'));
 
