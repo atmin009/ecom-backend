@@ -1,6 +1,5 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
-import iconv from 'iconv-lite';
 
 dotenv.config();
 
@@ -88,32 +87,11 @@ class MailbitSmsService {
         messageLength: message.length,
       });
 
-      // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
-      // This is required for MailBIT API v2 to display Thai characters correctly
-      // iconv-lite supports: 'tis620', 'win874', 'thai' (all are TIS-620 variants)
-      let encodedMessage: string;
-      try {
-        // Try TIS-620 encoding first
-        let tis620Buffer: Buffer;
-        try {
-          tis620Buffer = iconv.encode(message, 'tis620');
-        } catch (e) {
-          // Fallback to win874 (Windows Thai encoding, compatible with TIS-620)
-          try {
-            tis620Buffer = iconv.encode(message, 'win874');
-          } catch (e2) {
-            // Last fallback to thai encoding
-            tis620Buffer = iconv.encode(message, 'thai');
-          }
-        }
-        // URL encode the TIS-620 encoded message
-        encodedMessage = encodeURIComponent(tis620Buffer.toString('binary'));
-        console.log('✅ [MailBIT SMS] Message converted to TIS-620 encoding');
-      } catch (encodingError: any) {
-        console.warn('⚠️  [MailBIT SMS] TIS-620 encoding failed, falling back to UTF-8:', encodingError.message);
-        // Fallback to UTF-8 if TIS-620 encoding fails
-        encodedMessage = encodeURIComponent(message);
-      }
+      // URL encode the message (UTF-8 encoding)
+      // MailBIT API v2 should support UTF-8 URL encoding for Thai characters
+      // If Thai characters show as ???, we may need to add iconv-lite for TIS-620 conversion
+      const encodedMessage = encodeURIComponent(message);
+      console.log('✅ [MailBIT SMS] Message URL-encoded (UTF-8)');
 
       // Build API URL with query parameters (GET request like the PHP example)
       // Format: http://dplus.mailbit.co.th/api/v2/SendSMS?ApiKey=...&ClientId=...&SenderId=...&message=...&mobileNumbers=...&fl=0
