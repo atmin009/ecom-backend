@@ -46,6 +46,12 @@ export interface Product {
   thickness?: string; // ความหนา (เช่น 0.33mm)
   hardness?: string; // ความแข็ง (เช่น 9H)
   features?: string; // คุณสมบัติพิเศษ
+  // Promotion fields
+  promotion_price?: number; // ราคาโปรโมชั่น
+  promotion_start_date?: string; // ISO date string
+  promotion_end_date?: string; // ISO date string
+  promotion_action?: 'revert_price' | 'hide_product'; // การกระทำเมื่อหมดเวลา
+  original_price?: number; // ราคาเดิม (เก็บไว้สำหรับ revert)
   created_at?: Date;
   updated_at?: Date;
 }

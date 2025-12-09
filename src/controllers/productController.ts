@@ -14,6 +14,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       p.id, p.name, p.sku, p.price, p.description_short, p.description_long, 
       p.image_url, p.is_active, p.is_free_gift, p.category_id, p.brand_id,
       p.device_model, p.film_type, p.screen_size, p.thickness, p.hardness, p.features,
+      p.promotion_price, p.promotion_start_date, p.promotion_end_date, p.promotion_action, p.original_price,
       c.id as category_id_full, c.name as category_name, c.name_en as category_name_en, c.is_active as category_is_active,
       b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en, b.is_active as brand_is_active
     FROM products p
@@ -79,6 +80,12 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
+    // Promotion fields
+    promotion_price: row.promotion_price,
+    promotion_start_date: row.promotion_start_date,
+    promotion_end_date: row.promotion_end_date,
+    promotion_action: row.promotion_action,
+    original_price: row.original_price,
     category: row.category_id ? {
       id: row.category_id_full,
       name: row.category_name,
@@ -112,6 +119,7 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
       p.id, p.name, p.sku, p.price, p.description_short, p.description_long, 
       p.image_url, p.is_active, p.is_free_gift, p.category_id, p.brand_id,
       p.device_model, p.film_type, p.screen_size, p.thickness, p.hardness, p.features,
+      p.promotion_price, p.promotion_start_date, p.promotion_end_date, p.promotion_action, p.original_price,
       c.id as category_id_full, c.name as category_name, c.name_en as category_name_en, c.is_active as category_is_active,
       b.id as brand_id_full, b.name as brand_name, b.name_en as brand_name_en, b.is_active as brand_is_active
     FROM products p
@@ -147,6 +155,12 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
+    // Promotion fields
+    promotion_price: row.promotion_price,
+    promotion_start_date: row.promotion_start_date,
+    promotion_end_date: row.promotion_end_date,
+    promotion_action: row.promotion_action,
+    original_price: row.original_price,
     category: row.category_id ? {
       id: row.category_id_full,
       name: row.category_name,
