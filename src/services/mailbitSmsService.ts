@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import iconv from 'iconv-lite';
 
 dotenv.config();
 
@@ -87,11 +88,43 @@ class MailbitSmsService {
         messageLength: message.length,
       });
 
-      // URL encode the message (UTF-8 encoding)
-      // MailBIT API v2 should support UTF-8 URL encoding for Thai characters
-      // If Thai characters show as ???, we may need to add iconv-lite for TIS-620 conversion
-      const encodedMessage = encodeURIComponent(message);
-      console.log('✅ [MailBIT SMS] Message URL-encoded (UTF-8)');
+      // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
+      // This is required for MailBIT API v2 to display Thai characters correctly
+      let encodedMessage: string;
+      try {
+        // iconv-lite supports TIS-620 encoding
+        // Try different encoding names that iconv-lite might recognize
+        let tis620Buffer: Buffer;
+        
+        // Try 'tis620' first (standard name)
+        try {
+          tis620Buffer = iconv.encode(message, 'tis620');
+          console.log('✅ [MailBIT SMS] Message encoded using TIS-620');
+        } catch (e1: any) {
+          // Fallback to 'win874' (Windows Thai encoding, compatible with TIS-620)
+          try {
+            tis620Buffer = iconv.encode(message, 'win874');
+            console.log('✅ [MailBIT SMS] Message encoded using WIN874 (TIS-620 compatible)');
+          } catch (e2: any) {
+            // Last fallback to 'thai' encoding
+            try {
+              tis620Buffer = iconv.encode(message, 'thai');
+              console.log('✅ [MailBIT SMS] Message encoded using THAI encoding');
+            } catch (e3: any) {
+              throw new Error(`All TIS-620 encoding attempts failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+            }
+          }
+        }
+        
+        // Convert buffer to binary string and URL encode
+        encodedMessage = encodeURIComponent(tis620Buffer.toString('binary'));
+        console.log('✅ [MailBIT SMS] Message converted to TIS-620 and URL-encoded');
+      } catch (encodingError: any) {
+        console.warn('⚠️  [MailBIT SMS] TIS-620 encoding failed, falling back to UTF-8:', encodingError.message);
+        // Fallback to UTF-8 if TIS-620 encoding fails
+        encodedMessage = encodeURIComponent(message);
+        console.log('⚠️  [MailBIT SMS] Using UTF-8 encoding (Thai characters may show as ???)');
+      }
 
       // Build API URL with query parameters (GET request like the PHP example)
       // Format: http://dplus.mailbit.co.th/api/v2/SendSMS?ApiKey=...&ClientId=...&SenderId=...&message=...&mobileNumbers=...&fl=0
