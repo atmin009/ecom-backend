@@ -124,8 +124,19 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
 
     // Create order items
     for (const item of validatedCartItems) {
-      const isFreeGift = freeGiftService.isFreeGift(item.product_id);
+      // Check if item is free gift:
+      // 1. unit_price === 0 (from promotions)
+      // 2. product is marked as free gift in database
+      const isFreeGift = item.unit_price === 0 || freeGiftService.isFreeGift(item.product_id);
       const totalPrice = item.unit_price * item.quantity;
+
+      console.log('Creating order item:', {
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: totalPrice,
+        is_free_gift: isFreeGift,
+      });
 
       await connection.execute(
         `INSERT INTO order_items (
@@ -138,7 +149,7 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
           item.quantity,
           item.unit_price,
           totalPrice,
-          isFreeGift,
+          isFreeGift ? 1 : 0, // MySQL boolean: 1 for true, 0 for false
         ]
       );
     }
