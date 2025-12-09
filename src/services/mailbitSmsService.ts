@@ -80,8 +80,7 @@ class MailbitSmsService {
 
       // ❌ การเปลี่ยนแปลงตามคำขอ: ใช้ Message (ข้อความดิบ) โดยตรงใน URL 
       // ซึ่งอาจทำให้เกิดปัญหา ????????
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=${message}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
-
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
       console.log('📤 [SMS] Sending via GET request with Unicode support (Unencoded Message)');
       console.log('🌐 [SMS] API URL (sanitized):',
         apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
