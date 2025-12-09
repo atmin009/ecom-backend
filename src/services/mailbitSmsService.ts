@@ -85,20 +85,14 @@ class MailbitSmsService {
 
       // Build URL with query parameters (GET request)
       // Format: https://api.send-sms.in.th/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
-      // Use encodeURIComponent for Message to ensure proper UTF-8 percent-encoding
-      const encodedMessage = encodeURIComponent(message);
-      const encodedApiKey = encodeURIComponent(this.apiKey);
-      
-      // Build URL manually to ensure proper encoding
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${encodeURIComponent(this.senderId)}&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodedApiKey}&ClientId=${encodeURIComponent(this.clientId)}`;
+      // Use encodeURIComponent for all parameters (including Thai message) - this will create UTF-8 percent-encoding
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${encodeURIComponent(this.senderId)}&Is_Unicode=true&Message=${encodeURIComponent(message)}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
 
       console.log('📤 [SMS] Sending via GET request with Unicode support');
       console.log('🌐 [SMS] API URL (sanitized):', apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
-      console.log('📝 [SMS] Message encoding check:', {
+      console.log('📝 [SMS] Message encoding:', {
         original: message.substring(0, 30) + '...',
-        encoded: encodedMessage.substring(0, 50) + '...',
-        encodingMatch: encodedMessage.includes('%E0%B8%A3') ? '✅ UTF-8 percent-encoding detected' : '⚠️ Different encoding',
-        expectedPattern: '%E0%B8%A3%E0%B8%B0%E0%B8%9A...',
+        encoded: encodeURIComponent(message).substring(0, 50) + '...',
       });
 
       // Send GET request
