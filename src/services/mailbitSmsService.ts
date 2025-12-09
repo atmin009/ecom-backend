@@ -90,10 +90,22 @@ class MailbitSmsService {
 
       // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
       // This is required for MailBIT API v2 to display Thai characters correctly
+      // iconv-lite supports: 'tis620', 'win874', 'thai' (all are TIS-620 variants)
       let encodedMessage: string;
       try {
-        // Convert UTF-8 string to TIS-620 buffer, then to URL-encoded string
-        const tis620Buffer = iconv.encode(message, 'tis620');
+        // Try TIS-620 encoding first
+        let tis620Buffer: Buffer;
+        try {
+          tis620Buffer = iconv.encode(message, 'tis620');
+        } catch (e) {
+          // Fallback to win874 (Windows Thai encoding, compatible with TIS-620)
+          try {
+            tis620Buffer = iconv.encode(message, 'win874');
+          } catch (e2) {
+            // Last fallback to thai encoding
+            tis620Buffer = iconv.encode(message, 'thai');
+          }
+        }
         // URL encode the TIS-620 encoded message
         encodedMessage = encodeURIComponent(tis620Buffer.toString('binary'));
         console.log('✅ [MailBIT SMS] Message converted to TIS-620 encoding');
