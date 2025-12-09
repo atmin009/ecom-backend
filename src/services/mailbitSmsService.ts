@@ -7,7 +7,6 @@ dotenv.config();
  * SMS Service - Supports Thai characters via Unicode
  * * Service for sending SMS via send-sms.in.th API
  * API Documentation: https://api.send-sms.in.th/api/v2/SendSMS
- * * Format: GET https://api.send-sms.in.th/api/v2/SendSMS?SenderId=...&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
  */
 class MailbitSmsService {
   private baseUrl: string;
@@ -21,7 +20,6 @@ class MailbitSmsService {
     const clientId = process.env.MAILBIT_CLIENT_ID;
     const senderId = process.env.MAILBIT_SENDER_ID;
 
-    // Use new API endpoint: https://api.send-sms.in.th
     this.baseUrl = baseUrl || 'https://api.send-sms.in.th';
     this.apiKey = apiKey || '';
     this.clientId = clientId || '';
@@ -51,8 +49,11 @@ class MailbitSmsService {
     phone: string;
     orderId: string;
   }): Promise<any> {
+    const message = `ระบบได้รับการชำระเงินเรียบร้อย ขอบคุณที่เลือกฟิล์มกระจกโฟกัส เลขที่คำสั่งซื้อ ${orderId} กำลังดำเนินการจัดส่ง`;
+    let encodedMessage = ''; // กำหนดไว้เผื่อ Log แต่จะไม่ถูกใช้ใน apiUrl
+
     try {
-      // Validate inputs
+      // ... (Validation code is unchanged)
       if (!phone || !orderId) {
         throw new Error('Phone number and order ID are required');
       }
@@ -69,9 +70,7 @@ class MailbitSmsService {
           'SMS credentials not configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env'
         );
       }
-
-      // SMS message in Thai
-      const message = `ระบบได้รับการชำระเงินเรียบร้อย ขอบคุณที่เลือกฟิล์มกระจกโฟกัส เลขที่คำสั่งซื้อ ${orderId} กำลังดำเนินการจัดส่ง`;
+      
       console.log('📱 [SMS] Starting SMS send:', {
         phone: phone,
         orderId: orderId,
@@ -79,17 +78,20 @@ class MailbitSmsService {
         messagePreview: message.substring(0, 50) + '...',
       });
 
-      // 🚨 การแก้ไข: ใช้ encodeURIComponent เพื่อเข้ารหัสข้อความทั้งหมด 
-      // เพื่อให้ได้ URL-encoded UTF-8 ที่ถูกต้องสำหรับ Query Parameter
-      const encodedMessage = encodeURIComponent(message);
-      
+      // ❌ การเปลี่ยนแปลงตามคำขอ: ใช้ Message (ข้อความดิบ) โดยตรงใน URL 
+      // ซึ่งอาจทำให้เกิดปัญหา ????????
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=${message}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
-      console.log('📤 [SMS] Sending via GET request with Unicode support');
+
+      console.log('📤 [SMS] Sending via GET request with Unicode support (Unencoded Message)');
       console.log('🌐 [SMS] API URL (sanitized):',
         apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
+      
+      // Log encodedMessage สำหรับเปรียบเทียบเท่านั้น
+      encodedMessage = encodeURIComponent(message);
       console.log('📝 [SMS] Message encoding:', {
         original: message,
-        encoded: encodedMessage.substring(0, 100) + '...',
+        // แสดงสิ่งที่ควรจะเป็น ถ้าใช้ encodeURIComponent
+        shouldBeEncoded: encodedMessage.substring(0, 100) + '...', 
       });
 
       // Send GET request - axios will NOT re-encode the URL
@@ -119,6 +121,7 @@ class MailbitSmsService {
       return response.data;
 
     } catch (error: any) {
+      // ... (Error handling code is unchanged)
       console.error('❌ [SMS] Error:', {
         message: error.message,
         orderId: orderId,
