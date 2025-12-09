@@ -58,15 +58,15 @@ export const createPayment = asyncHandler(async (req: Request, res: Response) =>
 
   // Create payment with Moneyspec
   try {
-    const paymentResponse = await paymentService.createPayment(order, method);
+  const paymentResponse = await paymentService.createPayment(order, method);
 
-    const apiResponse: ApiResponse<any> = {
-      success: true,
-      data: paymentResponse,
-      message: 'สร้างการชำระเงินสำเร็จ',
-    };
+  const apiResponse: ApiResponse<any> = {
+    success: true,
+    data: paymentResponse,
+    message: 'สร้างการชำระเงินสำเร็จ',
+  };
 
-    res.json(apiResponse);
+  res.json(apiResponse);
   } catch (error: any) {
     console.error('Payment creation error in controller:', error);
     console.error('Order details:', {

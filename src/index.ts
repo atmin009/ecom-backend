@@ -11,6 +11,7 @@ import { addressRoutes } from './routes/addressRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import brandRoutes from './routes/brandRoutes';
 import adminRoutes from './routes/adminRoutes';
+import { smsRoutes } from './routes/smsRoutes';
 import { handleMoneyspecWebhook } from './controllers/paymentController';
 
 dotenv.config();
@@ -97,6 +98,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/sms', smsRoutes);
 
 // Log registered routes (for debugging)
 console.log('📋 Registered API Routes:');

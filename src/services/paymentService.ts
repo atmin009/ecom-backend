@@ -416,11 +416,35 @@ class PaymentService {
         );
         if (orderResult.rows.length > 0) {
           const { customer_phone, order_number } = orderResult.rows[0];
-          const { smsService } = await import('./smsService');
-          await smsService.sendNotification(
-            customer_phone,
-            `Payment successful for order ${order_number}. Thank you for your purchase!`
-          );
+          
+          // Send payment success SMS via MailBIT
+          // Normalize phone number to MailBIT format (6681xxxxxxx)
+          let normalizedPhone = customer_phone;
+          if (normalizedPhone) {
+            // Remove spaces and dashes
+            normalizedPhone = normalizedPhone.replace(/\s+/g, '').replace(/-/g, '');
+            
+            // Convert to MailBIT format: 6681xxxxxxx
+            // If starts with 0, replace with 66
+            if (normalizedPhone.startsWith('0')) {
+              normalizedPhone = '66' + normalizedPhone.substring(1);
+            } else if (!normalizedPhone.startsWith('66')) {
+              // If doesn't start with 66, add it
+              normalizedPhone = '66' + normalizedPhone;
+            }
+            
+            // Send SMS (non-blocking - don't wait for completion)
+            const { mailbitSmsService } = await import('./mailbitSmsService');
+            mailbitSmsService
+              .sendPaymentSuccessSms({
+                phone: normalizedPhone,
+                orderId: order_number,
+              })
+              .catch((error) => {
+                // Log error but don't fail the webhook
+                console.error('Failed to send payment success SMS:', error);
+              });
+          }
         }
       }
 
