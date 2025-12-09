@@ -5,11 +5,9 @@ dotenv.config();
 
 /**
  * SMS Service - Supports Thai characters via Unicode
- * 
- * Service for sending SMS via send-sms.in.th API
+ * * Service for sending SMS via send-sms.in.th API
  * API Documentation: https://api.send-sms.in.th/api/v2/SendSMS
- * 
- * Format: GET https://api.send-sms.in.th/api/v2/SendSMS?SenderId=...&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
+ * * Format: GET https://api.send-sms.in.th/api/v2/SendSMS?SenderId=...&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
  */
 class MailbitSmsService {
   private baseUrl: string;
@@ -30,20 +28,19 @@ class MailbitSmsService {
     this.senderId = senderId || 'ABLEMEN';
 
     console.log('📋 SMS Service Configuration:');
-    console.log(`  Base URL: ${this.baseUrl} (from ${baseUrl ? '.env' : 'default'})`);
-    console.log(`  Sender ID: ${this.senderId} (from ${senderId ? '.env' : 'default'})`);
-    console.log(`  API Key: ${this.apiKey ? '✅ Configured (' + this.apiKey.substring(0, 8) + '...)' : '❌ Not configured'}`);
-    console.log(`  Client ID: ${this.clientId ? '✅ Configured (' + this.clientId.substring(0, 8) + '...)' : '❌ Not configured'}`);
+    console.log(`  Base URL: ${this.baseUrl} (from ${baseUrl ? '.env' : 'default'})`);
+    console.log(`  Sender ID: ${this.senderId} (from ${senderId ? '.env' : 'default'})`);
+    console.log(`  API Key: ${this.apiKey ? '✅ Configured (' + this.apiKey.substring(0, 8) + '...)' : '❌ Not configured'}`);
+    console.log(`  Client ID: ${this.clientId ? '✅ Configured (' + this.clientId.substring(0, 8) + '...)' : '❌ Not configured'}`);
 
     if (!this.apiKey || !this.clientId) {
-      console.warn('⚠️  SMS credentials not fully configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env file.');
+      console.warn('⚠️  SMS credentials not fully configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env file.');
     }
   }
 
   /**
    * Send payment success SMS notification
-   * 
-   * @param phone - Customer phone number in format "6681xxxxxxx"
+   * * @param phone - Customer phone number in format "6681xxxxxxx"
    * @param orderId - Order number string (e.g., "ORD-20251209-20971")
    * @returns MailBIT API response
    */
@@ -83,25 +80,14 @@ class MailbitSmsService {
         messagePreview: message.substring(0, 50) + '...',
       });
 
-      // Build URL manually - NO double encoding!
-      // Only encode spaces and special chars, NOT Thai characters
-      const encodedMessage = message
-        .split('')
-        .map(char => {
-          const code = char.charCodeAt(0);
-          // Keep Thai characters (U+0E00 to U+0E7F) and ASCII alphanumeric as-is
-          if ((code >= 0x0E00 && code <= 0x0E7F) || /[a-zA-Z0-9\-_.~]/.test(char)) {
-            return char;
-          }
-          // Encode everything else (spaces, special chars)
-          return encodeURIComponent(char);
-        })
-        .join('');
-
+      // 🚨 การแก้ไข: ใช้ encodeURIComponent เพื่อเข้ารหัสข้อความทั้งหมด 
+      // เพื่อให้ได้ URL-encoded UTF-8 ที่ถูกต้องสำหรับ Query Parameter
+      const encodedMessage = encodeURIComponent(message);
+      
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${this.senderId}&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
 
       console.log('📤 [SMS] Sending via GET request with Unicode support');
-      console.log('🌐 [SMS] API URL (sanitized):', 
+      console.log('🌐 [SMS] API URL (sanitized):',
         apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
       console.log('📝 [SMS] Message encoding:', {
         original: message,
@@ -148,7 +134,7 @@ class MailbitSmsService {
           data: error.response.data,
         });
         throw new Error(
-          error.response.data?.ErrorDescription || 
+          error.response.data?.ErrorDescription ||
           error.response.data?.error ||
           `SMS API error: ${error.response.status} ${error.response.statusText}`
         );
