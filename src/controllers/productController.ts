@@ -61,6 +61,19 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   
   const result = await query(queryStr, params.length > 0 ? params : undefined);
   
+  // Helper function to convert MySQL DATETIME to ISO string
+  const convertDateToISO = (dateValue: any): string | undefined => {
+    if (!dateValue) return undefined;
+    try {
+      // MySQL DATETIME comes as string "YYYY-MM-DD HH:MM:SS" or Date object
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (isNaN(date.getTime())) return undefined;
+      return date.toISOString();
+    } catch {
+      return undefined;
+    }
+  };
+
   // Transform results to include category and brand objects
   const products: Product[] = result.rows.map((row: any) => ({
     id: row.id,
@@ -80,10 +93,10 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
-    // Promotion fields
+    // Promotion fields - convert dates to ISO strings
     promotion_price: row.promotion_price,
-    promotion_start_date: row.promotion_start_date,
-    promotion_end_date: row.promotion_end_date,
+    promotion_start_date: convertDateToISO(row.promotion_start_date),
+    promotion_end_date: convertDateToISO(row.promotion_end_date),
     promotion_action: row.promotion_action,
     original_price: row.original_price,
     category: row.category_id ? {
@@ -136,6 +149,18 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
     });
   }
 
+  // Helper function to convert MySQL DATETIME to ISO string
+  const convertDateToISO = (dateValue: any): string | undefined => {
+    if (!dateValue) return undefined;
+    try {
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (isNaN(date.getTime())) return undefined;
+      return date.toISOString();
+    } catch {
+      return undefined;
+    }
+  };
+
   const row = result.rows[0];
   const product: Product = {
     id: row.id,
@@ -155,10 +180,10 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
-    // Promotion fields
+    // Promotion fields - convert dates to ISO strings
     promotion_price: row.promotion_price,
-    promotion_start_date: row.promotion_start_date,
-    promotion_end_date: row.promotion_end_date,
+    promotion_start_date: convertDateToISO(row.promotion_start_date),
+    promotion_end_date: convertDateToISO(row.promotion_end_date),
     promotion_action: row.promotion_action,
     original_price: row.original_price,
     category: row.category_id ? {

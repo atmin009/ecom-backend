@@ -105,6 +105,25 @@ export const getAdminProducts = asyncHandler(async (req: Request, res: Response)
 
   console.log('Admin Products Total:', total);
 
+  // Helper function to convert MySQL DATETIME to ISO string
+  const convertDateToISO = (dateValue: any): string | undefined => {
+    if (!dateValue) return undefined;
+    try {
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (isNaN(date.getTime())) return undefined;
+      return date.toISOString();
+    } catch {
+      return undefined;
+    }
+  };
+
+  // Transform products to convert dates to ISO strings
+  const products: Product[] = (result.rows || []).map((row: any) => ({
+    ...row,
+    promotion_start_date: convertDateToISO(row.promotion_start_date),
+    promotion_end_date: convertDateToISO(row.promotion_end_date),
+  }));
+
   const response: ApiResponse<{
     products: Product[];
     pagination: {
@@ -116,7 +135,7 @@ export const getAdminProducts = asyncHandler(async (req: Request, res: Response)
   }> = {
     success: true,
     data: {
-      products: result.rows || [],
+      products: products,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -161,9 +180,27 @@ export const getAdminProductById = asyncHandler(async (req: Request, res: Respon
     });
   }
 
+  // Helper function to convert MySQL DATETIME to ISO string
+  const convertDateToISO = (dateValue: any): string | undefined => {
+    if (!dateValue) return undefined;
+    try {
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      if (isNaN(date.getTime())) return undefined;
+      return date.toISOString();
+    } catch {
+      return undefined;
+    }
+  };
+
+  const product: Product = {
+    ...result.rows[0],
+    promotion_start_date: convertDateToISO(result.rows[0].promotion_start_date),
+    promotion_end_date: convertDateToISO(result.rows[0].promotion_end_date),
+  };
+
   const response: ApiResponse<Product> = {
     success: true,
-    data: result.rows[0],
+    data: product,
   };
 
   res.json(response);
@@ -444,21 +481,12 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   safePush('hardness = ?', hardness);
   safePush('features = ?', features);
   // Promotion fields - always include them to allow clearing promotion
-  if (promotion_price !== undefined) {
-    safePush('promotion_price = ?', promotion_price !== null && promotion_price !== '' ? Number(promotion_price) : null);
-  }
-  if (promotion_start_date !== undefined) {
-    safePush('promotion_start_date = ?', promotion_start_date || null);
-  }
-  if (promotion_end_date !== undefined) {
-    safePush('promotion_end_date = ?', promotion_end_date || null);
-  }
-  if (promotion_action !== undefined) {
-    safePush('promotion_action = ?', promotion_action || null);
-  }
-  if (original_price !== undefined) {
-    safePush('original_price = ?', original_price !== null && original_price !== '' ? Number(original_price) : null);
-  }
+  // Always include promotion fields in update, even if they're null/empty, to allow clearing
+  safePush('promotion_price = ?', promotion_price !== undefined && promotion_price !== null && promotion_price !== '' ? Number(promotion_price) : null);
+  safePush('promotion_start_date = ?', promotion_start_date !== undefined && promotion_start_date !== null && promotion_start_date !== '' ? promotion_start_date : null);
+  safePush('promotion_end_date = ?', promotion_end_date !== undefined && promotion_end_date !== null && promotion_end_date !== '' ? promotion_end_date : null);
+  safePush('promotion_action = ?', promotion_action !== undefined && promotion_action !== null && promotion_action !== '' ? promotion_action : null);
+  safePush('original_price = ?', original_price !== undefined && original_price !== null && original_price !== '' ? Number(original_price) : null);
 
   // Log promotion data for debugging
   console.log('📊 [Update Product] Full request body:', JSON.stringify(req.body, null, 2));
