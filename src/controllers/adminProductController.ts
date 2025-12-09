@@ -230,6 +230,7 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
   }
 
   // Log promotion data for debugging
+  console.log('📊 [Create Product] Full request body:', JSON.stringify(req.body, null, 2));
   console.log('📊 [Create Product] Promotion data:', {
     promotion_price,
     promotion_start_date,
@@ -242,7 +243,23 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
   try {
     await connection.beginTransaction();
 
-    await connection.execute(
+    // Prepare promotion values
+    const promoPrice = promotion_price !== null && promotion_price !== undefined && promotion_price !== '' 
+      ? Number(promotion_price) 
+      : null;
+    const origPrice = original_price !== null && original_price !== undefined && original_price !== '' 
+      ? Number(original_price) 
+      : null;
+
+    console.log('📊 [Create Product] Prepared promotion values:', {
+      promoPrice,
+      origPrice,
+      promotion_start_date,
+      promotion_end_date,
+      promotion_action,
+    });
+
+    const [result] = await connection.execute(
       `INSERT INTO products (
         name, sku, price, description_short, description_long, image_url,
         is_active, is_free_gift, category_id, brand_id,
@@ -266,15 +283,17 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
         thickness || null,
         hardness || null,
         features || null,
-        promotion_price !== null && promotion_price !== undefined && promotion_price !== '' ? Number(promotion_price) : null,
+        promoPrice,
         promotion_start_date || null,
         promotion_end_date || null,
         promotion_action || null,
-        original_price !== null && original_price !== undefined && original_price !== '' ? Number(original_price) : null,
+        origPrice,
       ]
-    );
+    ) as any;
 
-    const productId = (connection as any).insertId;
+    const productId = result.insertId;
+    console.log('✅ [Create Product] Product created with ID:', productId);
+    
     await connection.commit();
 
     // Fetch created product
@@ -282,6 +301,15 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
       `SELECT * FROM products WHERE id = ?`,
       [productId]
     );
+    
+    console.log('📦 [Create Product] Created product data:', {
+      id: productResult.rows[0]?.id,
+      promotion_price: productResult.rows[0]?.promotion_price,
+      promotion_start_date: productResult.rows[0]?.promotion_start_date,
+      promotion_end_date: productResult.rows[0]?.promotion_end_date,
+      promotion_action: productResult.rows[0]?.promotion_action,
+      original_price: productResult.rows[0]?.original_price,
+    });
 
     const response: ApiResponse<Product> = {
       success: true,
@@ -292,6 +320,20 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     res.status(201).json(response);
   } catch (error: any) {
     await connection.rollback();
+    console.error('❌ [Create Product] Error:', error);
+    console.error('❌ [Create Product] Error message:', error.message);
+    console.error('❌ [Create Product] Error code:', error.code);
+    console.error('❌ [Create Product] Error sqlMessage:', error.sqlMessage);
+    
+    // Check if it's a column not found error
+    if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database columns สำหรับโปรโมชั่นยังไม่มี กรุณารัน migration: migration_add_promotion_fields.sql',
+        details: error.message,
+      });
+    }
+    
     throw error;
   } finally {
     connection.release();
@@ -416,6 +458,7 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   }
 
   // Log promotion data for debugging
+  console.log('📊 [Update Product] Full request body:', JSON.stringify(req.body, null, 2));
   console.log('📊 [Update Product] Promotion data:', {
     promotion_price,
     promotion_start_date,
@@ -435,16 +478,44 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   updateFields.push('updated_at = NOW()');
   updateValues.push(id);
 
-  await query(
-    `UPDATE products SET ${updateFields.join(', ')} WHERE id = ?`,
-    updateValues
-  );
+  try {
+    await query(
+      `UPDATE products SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
+    
+    console.log('✅ [Update Product] Update query executed successfully');
+  } catch (error: any) {
+    console.error('❌ [Update Product] Error:', error);
+    console.error('❌ [Update Product] Error message:', error.message);
+    console.error('❌ [Update Product] Error code:', error.code);
+    
+    // Check if it's a column not found error
+    if (error.code === 'ER_BAD_FIELD_ERROR' || error.message?.includes('Unknown column')) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database columns สำหรับโปรโมชั่นยังไม่มี กรุณารัน migration: migration_add_promotion_fields.sql',
+        details: error.message,
+      });
+    }
+    
+    throw error;
+  }
 
   // Fetch updated product
   const productResult = await query(
     `SELECT * FROM products WHERE id = ?`,
     [id]
   );
+  
+  console.log('📦 [Update Product] Updated product data:', {
+    id: productResult.rows[0]?.id,
+    promotion_price: productResult.rows[0]?.promotion_price,
+    promotion_start_date: productResult.rows[0]?.promotion_start_date,
+    promotion_end_date: productResult.rows[0]?.promotion_end_date,
+    promotion_action: productResult.rows[0]?.promotion_action,
+    original_price: productResult.rows[0]?.original_price,
+  });
 
   const response: ApiResponse<Product> = {
     success: true,
