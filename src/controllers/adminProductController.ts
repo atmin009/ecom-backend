@@ -279,6 +279,25 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     original_price,
   });
 
+  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
+    if (!isoString || isoString.trim() === '') return null;
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return null;
+      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return null;
+    }
+  };
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -290,12 +309,18 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     const origPrice = original_price !== null && original_price !== undefined && original_price !== '' 
       ? Number(original_price) 
       : null;
+    
+    // Convert ISO dates to MySQL DATETIME format
+    const mysqlStartDate = convertISOToMySQLDateTime(promotion_start_date);
+    const mysqlEndDate = convertISOToMySQLDateTime(promotion_end_date);
 
     console.log('📊 [Create Product] Prepared promotion values:', {
       promoPrice,
       origPrice,
       promotion_start_date,
       promotion_end_date,
+      mysqlStartDate,
+      mysqlEndDate,
       promotion_action,
     });
 
@@ -324,8 +349,8 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
         hardness || null,
         features || null,
         promoPrice,
-        promotion_start_date || null,
-        promotion_end_date || null,
+        mysqlStartDate,
+        mysqlEndDate,
         promotion_action || null,
         origPrice,
       ]
@@ -449,6 +474,25 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
     }
   }
 
+  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
+    if (!isoString || isoString.trim() === '') return null;
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return null;
+      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return null;
+    }
+  };
+
   // Build update query dynamically
   const updateFields: string[] = [];
   const updateValues: any[] = [];
@@ -482,9 +526,10 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   safePush('features = ?', features);
   // Promotion fields - always include them to allow clearing promotion
   // Always include promotion fields in update, even if they're null/empty, to allow clearing
+  // Convert ISO dates to MySQL DATETIME format before saving
   safePush('promotion_price = ?', promotion_price !== undefined && promotion_price !== null && promotion_price !== '' ? Number(promotion_price) : null);
-  safePush('promotion_start_date = ?', promotion_start_date !== undefined && promotion_start_date !== null && promotion_start_date !== '' ? promotion_start_date : null);
-  safePush('promotion_end_date = ?', promotion_end_date !== undefined && promotion_end_date !== null && promotion_end_date !== '' ? promotion_end_date : null);
+  safePush('promotion_start_date = ?', promotion_start_date !== undefined ? convertISOToMySQLDateTime(promotion_start_date) : null);
+  safePush('promotion_end_date = ?', promotion_end_date !== undefined ? convertISOToMySQLDateTime(promotion_end_date) : null);
   safePush('promotion_action = ?', promotion_action !== undefined && promotion_action !== null && promotion_action !== '' ? promotion_action : null);
   safePush('original_price = ?', original_price !== undefined && original_price !== null && original_price !== '' ? Number(original_price) : null);
 

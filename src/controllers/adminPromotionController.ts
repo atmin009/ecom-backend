@@ -171,6 +171,29 @@ export const createAdminPromotion = asyncHandler(async (req: Request, res: Respo
     });
   }
 
+  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
+    if (!isoString || isoString.trim() === '') return null;
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return null;
+      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // Convert ISO dates to MySQL DATETIME format
+  const mysqlStartDate = convertISOToMySQLDateTime(start_date);
+  const mysqlEndDate = convertISOToMySQLDateTime(end_date);
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -190,8 +213,8 @@ export const createAdminPromotion = asyncHandler(async (req: Request, res: Respo
         buy_quantity || null,
         get_quantity || null,
         free_gift_product_id || null,
-        start_date,
-        end_date,
+        mysqlStartDate,
+        mysqlEndDate,
         is_active !== undefined ? is_active : true,
         usage_limit || null,
         authReq.adminUser?.id || null,
@@ -268,6 +291,25 @@ export const updateAdminPromotion = asyncHandler(async (req: Request, res: Respo
     });
   }
 
+  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
+    if (!isoString || isoString.trim() === '') return null;
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return null;
+      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return null;
+    }
+  };
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -284,8 +326,8 @@ export const updateAdminPromotion = asyncHandler(async (req: Request, res: Respo
     if (buy_quantity !== undefined) { updateFields.push('buy_quantity = ?'); updateValues.push(buy_quantity); }
     if (get_quantity !== undefined) { updateFields.push('get_quantity = ?'); updateValues.push(get_quantity); }
     if (free_gift_product_id !== undefined) { updateFields.push('free_gift_product_id = ?'); updateValues.push(free_gift_product_id); }
-    if (start_date !== undefined) { updateFields.push('start_date = ?'); updateValues.push(start_date); }
-    if (end_date !== undefined) { updateFields.push('end_date = ?'); updateValues.push(end_date); }
+    if (start_date !== undefined) { updateFields.push('start_date = ?'); updateValues.push(convertISOToMySQLDateTime(start_date)); }
+    if (end_date !== undefined) { updateFields.push('end_date = ?'); updateValues.push(convertISOToMySQLDateTime(end_date)); }
     if (is_active !== undefined) { updateFields.push('is_active = ?'); updateValues.push(is_active); }
     if (usage_limit !== undefined) { updateFields.push('usage_limit = ?'); updateValues.push(usage_limit); }
 
