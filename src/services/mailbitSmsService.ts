@@ -72,7 +72,6 @@ class MailbitSmsService {
 
       // SMS message in Thai
       const message = `ระบบได้รับการชำระเงินเรียบร้อย ขอบคุณที่เลือกฟิล์มกระจกโฟกัส เลขที่คำสั่งซื้อ ${orderId} กำลังดำเนินการจัดส่ง`;
-
       console.log('📱 [SMS] Starting SMS send:', {
         phone: phone,
         orderId: orderId,
@@ -84,8 +83,7 @@ class MailbitSmsService {
       // เพื่อให้ได้ URL-encoded UTF-8 ที่ถูกต้องสำหรับ Query Parameter
       const encodedMessage = encodeURIComponent(message);
       
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${this.senderId}&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
-
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=${message}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
       console.log('📤 [SMS] Sending via GET request with Unicode support');
       console.log('🌐 [SMS] API URL (sanitized):',
         apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
