@@ -1,6 +1,5 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
-import iconv from 'iconv-lite';
 
 dotenv.config();
 
@@ -17,23 +16,34 @@ class MailbitSmsService {
   private senderId: string;
 
   constructor() {
-    // Support both dplus.mailbit.co.th and sms.mailbit.co.th
-    this.baseUrl = process.env.MAILBIT_BASE_URL || 'http://dplus.mailbit.co.th';
-    this.apiKey = process.env.MAILBIT_API_KEY || '';
-    this.clientId = process.env.MAILBIT_CLIENT_ID || '';
-    this.senderId = process.env.MAILBIT_SENDER_ID || 'Focus';
+    // Load environment variables from .env file (via dotenv.config() at top of file)
+    // These values are read from process.env which dotenv populates from .env file
+    const baseUrl = process.env.MAILBIT_BASE_URL;
+    const apiKey = process.env.MAILBIT_API_KEY;
+    const clientId = process.env.MAILBIT_CLIENT_ID;
+    const senderId = process.env.MAILBIT_SENDER_ID;
+
+    // Set values with defaults if not in .env
+    this.baseUrl = baseUrl || 'http://dplus.mailbit.co.th';
+    this.apiKey = apiKey || 'AU1HC4ePG3eCR0pOBzK01xmJ/4i+wbShEah1RlYSYuE=';
+    this.clientId = clientId || '63d4a713-08f1-4978-bdf5-7e9eb4409875';
+    this.senderId = senderId || 'ABLEMEN';
 
     // Log configuration on startup
-    console.log('📋 MailBIT SMS Service Configuration:');
-    console.log(`  Base URL: ${this.baseUrl}`);
-    console.log(`  Sender ID: ${this.senderId}`);
-    console.log(`  API Key: ${this.apiKey ? '✅ Configured (' + this.apiKey.substring(0, 8) + '...)' : '❌ Not configured'}`);
-    console.log(`  Client ID: ${this.clientId ? '✅ Configured (' + this.clientId.substring(0, 8) + '...)' : '❌ Not configured'}`);
+    console.log('📋 MailBIT SMS Service Configuration (from .env):');
+    console.log(`  Base URL: ${this.baseUrl} ${baseUrl ? '(from .env)' : '(default)'}`);
+    console.log(`  Sender ID: ${this.senderId} ${senderId ? '(from .env)' : '(default)'}`);
+    console.log(`  API Key: ${this.apiKey ? '✅ Configured from .env (' + this.apiKey.substring(0, 8) + '...)' : '❌ Not configured in .env'}`);
+    console.log(`  Client ID: ${this.clientId ? '✅ Configured from .env (' + this.clientId.substring(0, 8) + '...)' : '❌ Not configured in .env'}`);
 
     // Validate required configuration
     if (!this.apiKey || !this.clientId) {
       console.warn('⚠️  MailBIT SMS credentials not fully configured.');
-      console.warn('⚠️  Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env file.');
+      console.warn('⚠️  Please set the following in .env file:');
+      console.warn('     MAILBIT_API_KEY=your_api_key');
+      console.warn('     MAILBIT_CLIENT_ID=your_client_id');
+      console.warn('     MAILBIT_SENDER_ID=Focus (optional, defaults to "Focus")');
+      console.warn('     MAILBIT_BASE_URL=http://dplus.mailbit.co.th (optional, has default)');
     }
   }
 
@@ -88,78 +98,39 @@ class MailbitSmsService {
         messageLength: message.length,
       });
 
-      // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
-      // This is required for MailBIT API v2 to display Thai characters correctly
-      let encodedMessage: string;
-      try {
-        // iconv-lite supports TIS-620 encoding
-        // Try different encoding names that iconv-lite might recognize
-        let tis620Buffer: Buffer;
-        
-        // Try 'tis620' first (standard name)
-        try {
-          tis620Buffer = iconv.encode(message, 'tis620');
-          console.log('✅ [MailBIT SMS] Message encoded using TIS-620');
-        } catch (e1: any) {
-          // Fallback to 'win874' (Windows Thai encoding, compatible with TIS-620)
-          try {
-            tis620Buffer = iconv.encode(message, 'win874');
-            console.log('✅ [MailBIT SMS] Message encoded using WIN874 (TIS-620 compatible)');
-          } catch (e2: any) {
-            // Last fallback to 'thai' encoding
-            try {
-              tis620Buffer = iconv.encode(message, 'thai');
-              console.log('✅ [MailBIT SMS] Message encoded using THAI encoding');
-            } catch (e3: any) {
-              throw new Error(`All TIS-620 encoding attempts failed: ${e1.message}, ${e2.message}, ${e3.message}`);
-            }
-          }
-        }
-        
-        // Convert buffer to binary string and URL encode
-        encodedMessage = encodeURIComponent(tis620Buffer.toString('binary'));
-        console.log('✅ [MailBIT SMS] Message converted to TIS-620 and URL-encoded');
-      } catch (encodingError: any) {
-        console.warn('⚠️  [MailBIT SMS] TIS-620 encoding failed, falling back to UTF-8:', encodingError.message);
-        // Fallback to UTF-8 if TIS-620 encoding fails
-        encodedMessage = encodeURIComponent(message);
-        console.log('⚠️  [MailBIT SMS] Using UTF-8 encoding (Thai characters may show as ???)');
-      }
-
-      // Build API URL with query parameters (GET request like the PHP example)
-      // Format: http://dplus.mailbit.co.th/api/v2/SendSMS?ApiKey=...&ClientId=...&SenderId=...&message=...&mobileNumbers=...&fl=0
+      // Build API URL
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS`;
-      
-      // Build query string manually to use TIS-620 encoded message
-      const queryParams = [
-        `ApiKey=${encodeURIComponent(this.apiKey)}`,
-        `ClientId=${encodeURIComponent(this.clientId)}`,
-        `SenderId=${encodeURIComponent(this.senderId)}`,
-        `message=${encodedMessage}`,
-        `mobileNumbers=${encodeURIComponent(phone)}`,
-        `fl=0`,
-      ].join('&');
 
-      const fullUrl = `${apiUrl}?${queryParams}`;
-      
-      console.log('🔗 [MailBIT SMS] Full URL (message encoded):', fullUrl.replace(/message=[^&]+/, 'message=***ENCODED***'));
+      // Prepare JSON payload according to MailBIT API v2 documentation
+      // DataCoding: "08" = UCS2 (Unicode) - supports Thai characters
+      const payload = {
+        ApiKey: this.apiKey,
+        ClientId: this.clientId,
+        SenderId: this.senderId,
+        Message: message, // UTF-8 message (will be sent as Unicode via DataCoding)
+        MobileNumbers: phone,
+        Is_Unicode: true, // Optional: deprecated but kept for compatibility
+        Is_Flash: false, // Optional: false for normal SMS
+        DataCoding: '08', // "08" = UCS2 (Unicode) - supports Thai characters
+      };
 
       // Log request details (hide sensitive data)
-      const logParams = {
+      const logPayload = {
+        ...payload,
         ApiKey: this.apiKey ? this.apiKey.substring(0, 8) + '***' : 'NOT SET',
         ClientId: this.clientId ? this.clientId.substring(0, 8) + '***' : 'NOT SET',
-        SenderId: this.senderId,
-        message: message,
-        mobileNumbers: phone.substring(0, 4) + '****' + phone.substring(phone.length - 3),
-        fl: '0',
+        Message: message,
+        MobileNumbers: phone.substring(0, 4) + '****' + phone.substring(phone.length - 3),
       };
-      console.log('📤 [MailBIT SMS] Request parameters:', JSON.stringify(logParams, null, 2));
-      console.log('🌐 [MailBIT SMS] Calling API (GET):', apiUrl);
+      console.log('📤 [MailBIT SMS] Request payload:', JSON.stringify(logPayload, null, 2));
+      console.log('🌐 [MailBIT SMS] Calling API (POST):', apiUrl);
       console.log('⏱️  [MailBIT SMS] Request timestamp:', new Date().toISOString());
+      console.log('📝 [MailBIT SMS] Using DataCoding: 08 (UCS2/Unicode) for Thai characters');
 
-      // Call MailBIT API v2 using GET request (like the PHP example)
-      const response = await axios.get(fullUrl, {
+      // Call MailBIT API v2 using POST request with JSON body
+      const response = await axios.post(apiUrl, payload, {
         headers: {
+          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         timeout: 30000, // 30 seconds timeout
