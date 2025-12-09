@@ -380,7 +380,7 @@ class PaymentService {
       });
 
       const transactionId = payload.transaction_id || payload.transectionID || payload.id;
-      const orderNumber = payload.order_id || payload.orderid || payload.order_number;
+      let orderNumber = payload.order_id || payload.orderid || payload.order_number;
       const status = payload.status || payload.payment_status;
       const amount = payload.amount;
 
@@ -392,14 +392,30 @@ class PaymentService {
         allPayloadKeys: Object.keys(payload),
       });
 
-      console.log('🔍 [Webhook Handler] Looking for order:', orderNumber);
-      const orderResult = await query(
-        `SELECT id FROM orders WHERE order_number = ?`,
-        [orderNumber]
+      // Normalize order number: webhook may send "ORD2025120918345" but DB has "ORD-20251209-18345"
+      // Try to match by removing dashes from both sides
+      const normalizedOrderNumber = orderNumber ? orderNumber.replace(/-/g, '') : '';
+      console.log('🔄 [Webhook Handler] Normalizing order number:', {
+        original: orderNumber,
+        normalized: normalizedOrderNumber,
+      });
+
+      // Try to find order by exact match first, then by normalized (without dashes)
+      console.log('🔍 [Webhook Handler] Looking for order:', {
+        exact: orderNumber,
+        normalized: normalizedOrderNumber,
+      });
+      
+      let orderResult = await query(
+        `SELECT id FROM orders WHERE order_number = ? OR REPLACE(order_number, '-', '') = ?`,
+        [orderNumber, normalizedOrderNumber]
       );
 
       if (orderResult.rows.length === 0) {
-        console.error('❌ [Webhook Handler] Order not found:', orderNumber);
+        console.error('❌ [Webhook Handler] Order not found:', {
+          original: orderNumber,
+          normalized: normalizedOrderNumber,
+        });
         throw new Error(`Order not found: ${orderNumber}`);
       }
 
@@ -467,11 +483,12 @@ class PaymentService {
           
           // Send payment success SMS via MailBIT
           // Normalize phone number to MailBIT format (6681xxxxxxx)
+          // Database stores: 0971242454 -> Need: 66971242454
           let normalizedPhone = customer_phone;
           if (normalizedPhone) {
             const originalPhone = normalizedPhone;
-            // Remove spaces and dashes
-            normalizedPhone = normalizedPhone.replace(/\s+/g, '').replace(/-/g, '');
+            // Remove spaces, dashes, and any non-digit characters
+            normalizedPhone = normalizedPhone.replace(/\D/g, '');
             
             console.log('🔄 [Payment Webhook] Normalizing phone number:', {
               original: originalPhone,
@@ -479,14 +496,38 @@ class PaymentService {
             });
             
             // Convert to MailBIT format: 6681xxxxxxx
-            // If starts with 0, replace with 66
-            if (normalizedPhone.startsWith('0')) {
+            // If starts with 0 (Thai format), replace 0 with 66
+            // Example: 0971242454 -> 66971242454
+            if (normalizedPhone.startsWith('0') && normalizedPhone.length === 10) {
               normalizedPhone = '66' + normalizedPhone.substring(1);
-              console.log('🔄 [Payment Webhook] Phone starts with 0, replaced with 66:', normalizedPhone);
-            } else if (!normalizedPhone.startsWith('66')) {
-              // If doesn't start with 66, add it
+              console.log('🔄 [Payment Webhook] Phone starts with 0 (Thai format), replaced with 66:', {
+                before: originalPhone,
+                after: normalizedPhone,
+              });
+            } else if (normalizedPhone.startsWith('66')) {
+              // Already in correct format
+              console.log('✅ [Payment Webhook] Phone already in correct format (starts with 66)');
+            } else if (!normalizedPhone.startsWith('66') && normalizedPhone.length === 9) {
+              // If 9 digits without country code, add 66
               normalizedPhone = '66' + normalizedPhone;
               console.log('🔄 [Payment Webhook] Phone doesn\'t start with 66, added 66:', normalizedPhone);
+            } else {
+              console.warn('⚠️  [Payment Webhook] Phone number format may be incorrect:', {
+                original: originalPhone,
+                cleaned: normalizedPhone,
+                length: normalizedPhone.length,
+              });
+            }
+            
+            // Validate final format: should be 11 digits starting with 66
+            const phoneRegex = /^66\d{9}$/;
+            if (!phoneRegex.test(normalizedPhone)) {
+              console.error('❌ [Payment Webhook] Invalid phone format after normalization:', {
+                original: originalPhone,
+                normalized: normalizedPhone,
+                expectedFormat: '66XXXXXXXXX (11 digits)',
+              });
+              throw new Error(`Invalid phone number format: ${normalizedPhone}. Expected format: 66XXXXXXXXX`);
             }
             
             console.log('📱 [Payment Webhook] Final normalized phone:', normalizedPhone);
