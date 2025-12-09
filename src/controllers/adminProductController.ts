@@ -192,6 +192,11 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     thickness,
     hardness,
     features,
+    promotion_price,
+    promotion_start_date,
+    promotion_end_date,
+    promotion_action,
+    original_price,
   } = req.body;
 
   // Validate required fields
@@ -232,8 +237,9 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
       `INSERT INTO products (
         name, sku, price, description_short, description_long, image_url,
         is_active, is_free_gift, category_id, brand_id,
-        device_model, film_type, screen_size, thickness, hardness, features
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        device_model, film_type, screen_size, thickness, hardness, features,
+        promotion_price, promotion_start_date, promotion_end_date, promotion_action, original_price
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         sku,
@@ -251,6 +257,11 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
         thickness || null,
         hardness || null,
         features || null,
+        promotion_price || null,
+        promotion_start_date || null,
+        promotion_end_date || null,
+        promotion_action || null,
+        original_price || null,
       ]
     );
 
@@ -301,6 +312,11 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
     thickness,
     hardness,
     features,
+    promotion_price,
+    promotion_start_date,
+    promotion_end_date,
+    promotion_action,
+    original_price,
   } = req.body;
 
   // Check if product exists
@@ -373,6 +389,16 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   safePush('thickness = ?', thickness);
   safePush('hardness = ?', hardness);
   safePush('features = ?', features);
+  // Promotion fields
+  if (promotion_price !== undefined) {
+    safePush('promotion_price = ?', promotion_price ? Number(promotion_price) : null);
+  }
+  safePush('promotion_start_date = ?', promotion_start_date);
+  safePush('promotion_end_date = ?', promotion_end_date);
+  safePush('promotion_action = ?', promotion_action);
+  if (original_price !== undefined) {
+    safePush('original_price = ?', original_price ? Number(original_price) : null);
+  }
 
   if (updateFields.length === 0) {
     return res.status(400).json({
