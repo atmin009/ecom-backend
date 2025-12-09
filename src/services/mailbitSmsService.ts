@@ -85,20 +85,24 @@ class MailbitSmsService {
 
       // Build URL with query parameters (GET request)
       // Format: https://api.send-sms.in.th/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
-      const params = new URLSearchParams();
-      params.append('SenderId', this.senderId);
-      params.append('Is_Unicode', 'true'); // TRUE for Thai characters
-      params.append('Message', message); // URLSearchParams will encode UTF-8 automatically
-      params.append('MobileNumbers', phone);
-      params.append('ApiKey', this.apiKey);
-      params.append('ClientId', this.clientId);
-
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?${params.toString()}`;
+      // Use encodeURIComponent for Message to ensure proper UTF-8 percent-encoding
+      const encodedMessage = encodeURIComponent(message);
+      const encodedApiKey = encodeURIComponent(this.apiKey);
+      
+      // Build URL manually to ensure proper encoding
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${encodeURIComponent(this.senderId)}&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodedApiKey}&ClientId=${encodeURIComponent(this.clientId)}`;
 
       console.log('📤 [SMS] Sending via GET request with Unicode support');
-      console.log('🌐 [SMS] API URL:', apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
+      console.log('🌐 [SMS] API URL (sanitized):', apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
+      console.log('📝 [SMS] Message encoding check:', {
+        original: message.substring(0, 30) + '...',
+        encoded: encodedMessage.substring(0, 50) + '...',
+        encodingMatch: encodedMessage.includes('%E0%B8%A3') ? '✅ UTF-8 percent-encoding detected' : '⚠️ Different encoding',
+        expectedPattern: '%E0%B8%A3%E0%B8%B0%E0%B8%9A...',
+      });
 
       // Send GET request
+      // Note: axios.get will use the URL as-is since we've already encoded it with encodeURIComponent
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
