@@ -41,19 +41,6 @@ class MailbitSmsService {
   }
 
   /**
-   * Encode Thai characters properly for the API
-   * The API expects Thai characters to NOT be percent-encoded
-   * but spaces and special characters should be encoded
-   */
-  private encodeThaiMessage(message: string): string {
-    // Use URLSearchParams which handles Thai characters correctly
-    const params = new URLSearchParams();
-    params.append('Message', message);
-    const encoded = params.toString().split('=')[1]; // Extract the encoded value
-    return encoded;
-  }
-
-  /**
    * Send payment success SMS notification
    * 
    * @param phone - Customer phone number in format "6681xxxxxxx"
@@ -96,34 +83,40 @@ class MailbitSmsService {
         messagePreview: message.substring(0, 50) + '...',
       });
 
-      // Build URL with query parameters
-      // Use URLSearchParams for proper Thai character encoding
-      const params = new URLSearchParams({
-        SenderId: this.senderId,
-        Is_Unicode: 'true',
-        Message: message,
-        MobileNumbers: phone,
-        ApiKey: this.apiKey,
-        ClientId: this.clientId,
-      });
+      // Build URL manually - NO double encoding!
+      // Only encode spaces and special chars, NOT Thai characters
+      const encodedMessage = message
+        .split('')
+        .map(char => {
+          const code = char.charCodeAt(0);
+          // Keep Thai characters (U+0E00 to U+0E7F) and ASCII alphanumeric as-is
+          if ((code >= 0x0E00 && code <= 0x0E7F) || /[a-zA-Z0-9\-_.~]/.test(char)) {
+            return char;
+          }
+          // Encode everything else (spaces, special chars)
+          return encodeURIComponent(char);
+        })
+        .join('');
 
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?${params.toString()}`;
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${this.senderId}&Is_Unicode=true&Message=${encodedMessage}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
 
       console.log('📤 [SMS] Sending via GET request with Unicode support');
       console.log('🌐 [SMS] API URL (sanitized):', 
         apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
       console.log('📝 [SMS] Message encoding:', {
-        original: message.substring(0, 30) + '...',
-        forUrl: params.get('Message')?.substring(0, 50) + '...',
+        original: message,
+        encoded: encodedMessage.substring(0, 100) + '...',
       });
 
-      // Send GET request
+      // Send GET request - axios will NOT re-encode the URL
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'User-Agent': 'Mozilla/5.0',
         },
         timeout: 30000,
+        // CRITICAL: Tell axios not to process the URL
+        validateStatus: () => true,
       });
 
       console.log('✅ [SMS] Response:', {
@@ -132,7 +125,7 @@ class MailbitSmsService {
         data: response.data,
       });
 
-      // Check for success (adjust based on actual API response format)
+      // Check for success
       if (response.data.ErrorCode === 0 || response.status === 200) {
         console.log('✅ [SMS] SMS sent successfully!');
       } else {
