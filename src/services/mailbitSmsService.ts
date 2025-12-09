@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import iconv from 'iconv-lite';
 
 dotenv.config();
 
@@ -101,17 +102,54 @@ class MailbitSmsService {
       // Build API URL
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS`;
 
+      // Convert message from UTF-8 to TIS-620 encoding (like PHP iconv("UTF-8", "TIS-620"))
+      // MailBIT API v2 requires TIS-620 encoding for Thai characters to display correctly
+      let encodedMessage: string;
+      try {
+        // Try different TIS-620 encoding names
+        let tis620Buffer: Buffer;
+        
+        try {
+          // Try 'tis620' first (standard name)
+          tis620Buffer = iconv.encode(message, 'tis620');
+          console.log('✅ [MailBIT SMS] Message encoded using TIS-620');
+        } catch (e1: any) {
+          try {
+            // Fallback to 'win874' (Windows Thai encoding, compatible with TIS-620)
+            tis620Buffer = iconv.encode(message, 'win874');
+            console.log('✅ [MailBIT SMS] Message encoded using WIN874 (TIS-620 compatible)');
+          } catch (e2: any) {
+            try {
+              // Last fallback to 'thai' encoding
+              tis620Buffer = iconv.encode(message, 'thai');
+              console.log('✅ [MailBIT SMS] Message encoded using THAI encoding');
+            } catch (e3: any) {
+              throw new Error(`All TIS-620 encoding attempts failed: ${e1.message}, ${e2.message}, ${e3.message}`);
+            }
+          }
+        }
+        
+        // Convert TIS-620 buffer to string (binary encoding)
+        encodedMessage = tis620Buffer.toString('binary');
+        console.log('✅ [MailBIT SMS] Message converted to TIS-620 encoding');
+      } catch (encodingError: any) {
+        console.warn('⚠️  [MailBIT SMS] TIS-620 encoding failed, using UTF-8:', encodingError.message);
+        // Fallback to UTF-8 if TIS-620 encoding fails
+        encodedMessage = message;
+      }
+
       // Prepare JSON payload according to MailBIT API v2 documentation
-      // DataCoding: "08" = UCS2 (Unicode) - supports Thai characters
+      // Use DataCoding: "03" (Latin1/ISO-8859-1) for TIS-620 encoded message
+      // Or use DataCoding: "00" (GSM) if TIS-620 doesn't work
       const payload = {
         ApiKey: this.apiKey,
         ClientId: this.clientId,
         SenderId: this.senderId,
-        Message: message, // UTF-8 message (will be sent as Unicode via DataCoding)
+        Message: encodedMessage, // TIS-620 encoded message
         MobileNumbers: phone,
-        Is_Unicode: true, // Optional: deprecated but kept for compatibility
+        Is_Unicode: false, // Set to false when using TIS-620
         Is_Flash: false, // Optional: false for normal SMS
-        DataCoding: '08', // "08" = UCS2 (Unicode) - supports Thai characters
+        DataCoding: '03', // "03" = Latin1 (ISO-8859-1) - compatible with TIS-620
       };
 
       // Log request details (hide sensitive data)
@@ -125,7 +163,7 @@ class MailbitSmsService {
       console.log('📤 [MailBIT SMS] Request payload:', JSON.stringify(logPayload, null, 2));
       console.log('🌐 [MailBIT SMS] Calling API (POST):', apiUrl);
       console.log('⏱️  [MailBIT SMS] Request timestamp:', new Date().toISOString());
-      console.log('📝 [MailBIT SMS] Using DataCoding: 08 (UCS2/Unicode) for Thai characters');
+      console.log('📝 [MailBIT SMS] Using DataCoding: 03 (Latin1/ISO-8859-1) with TIS-620 encoding for Thai characters');
 
       // Call MailBIT API v2 using POST request with JSON body
       const response = await axios.post(apiUrl, payload, {
