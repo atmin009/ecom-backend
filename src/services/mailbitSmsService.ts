@@ -41,6 +41,19 @@ class MailbitSmsService {
   }
 
   /**
+   * Encode Thai characters properly for the API
+   * The API expects Thai characters to NOT be percent-encoded
+   * but spaces and special characters should be encoded
+   */
+  private encodeThaiMessage(message: string): string {
+    // Use URLSearchParams which handles Thai characters correctly
+    const params = new URLSearchParams();
+    params.append('Message', message);
+    const encoded = params.toString().split('=')[1]; // Extract the encoded value
+    return encoded;
+  }
+
+  /**
    * Send payment success SMS notification
    * 
    * @param phone - Customer phone number in format "6681xxxxxxx"
@@ -83,23 +96,32 @@ class MailbitSmsService {
         messagePreview: message.substring(0, 50) + '...',
       });
 
-      // Build URL with query parameters (GET request)
-      // Format: https://api.send-sms.in.th/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
-      // Use encodeURIComponent for all parameters (including Thai message) - this will create UTF-8 percent-encoding
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?SenderId=${encodeURIComponent(this.senderId)}&Is_Unicode=true&Message=${encodeURIComponent(message)}&MobileNumbers=${phone}&ApiKey=${encodeURIComponent(this.apiKey)}&ClientId=${encodeURIComponent(this.clientId)}`;
+      // Build URL with query parameters
+      // Use URLSearchParams for proper Thai character encoding
+      const params = new URLSearchParams({
+        SenderId: this.senderId,
+        Is_Unicode: 'true',
+        Message: message,
+        MobileNumbers: phone,
+        ApiKey: this.apiKey,
+        ClientId: this.clientId,
+      });
+
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS?${params.toString()}`;
 
       console.log('📤 [SMS] Sending via GET request with Unicode support');
-      console.log('🌐 [SMS] API URL (sanitized):', apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
+      console.log('🌐 [SMS] API URL (sanitized):', 
+        apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
       console.log('📝 [SMS] Message encoding:', {
         original: message.substring(0, 30) + '...',
-        encoded: encodeURIComponent(message).substring(0, 50) + '...',
+        forUrl: params.get('Message')?.substring(0, 50) + '...',
       });
 
       // Send GET request
-      // Note: axios.get will use the URL as-is since we've already encoded it with encodeURIComponent
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
         timeout: 30000,
       });
