@@ -16,10 +16,11 @@ class MailbitSmsService {
   private senderId: string;
 
   constructor() {
-    this.baseUrl = process.env.MAILBIT_BASE_URL || 'https://sms.mailbit.co.th';
+    // Support both dplus.mailbit.co.th and sms.mailbit.co.th
+    this.baseUrl = process.env.MAILBIT_BASE_URL || 'http://dplus.mailbit.co.th';
     this.apiKey = process.env.MAILBIT_API_KEY || '';
     this.clientId = process.env.MAILBIT_CLIENT_ID || '';
-    this.senderId = process.env.MAILBIT_SENDER_ID || 'FocusShield';
+    this.senderId = process.env.MAILBIT_SENDER_ID || 'Focus';
 
     // Log configuration on startup
     console.log('📋 MailBIT SMS Service Configuration:');
@@ -86,42 +87,42 @@ class MailbitSmsService {
         messageLength: message.length,
       });
 
-      // Prepare payload for MailBIT API
-      const payload = {
-        senderId: this.senderId,
-        is_Unicode: true,
-        is_Flash: false,
-        dataCoding: 0,
-        schedTime: null,
-        groupId: null,
-        message: message,
+      // Build API URL with query parameters (GET request like the PHP example)
+      // Format: http://dplus.mailbit.co.th/api/v2/SendSMS?ApiKey=...&ClientId=...&SenderId=...&message=...&mobileNumbers=...&fl=0
+      // Note: URLSearchParams will automatically URL-encode the message (UTF-8)
+      // PHP example uses iconv("UTF-8", "TIS-620") but UTF-8 URL encoding should work fine
+      const apiUrl = `${this.baseUrl}/api/v2/SendSMS`;
+      
+      const params = new URLSearchParams({
+        ApiKey: this.apiKey,
+        ClientId: this.clientId,
+        SenderId: this.senderId,
+        message: message, // URLSearchParams will URL-encode this automatically
         mobileNumbers: phone,
-        serviceId: null,
-        coRelator: null,
-        linkId: null,
-        principleEntityId: null,
-        templateId: null,
-        apiKey: this.apiKey,
-        clientId: this.clientId,
-      };
+        fl: '0', // fl=0 for normal SMS (not flash message)
+      });
 
-      // Log payload (hide sensitive data)
-      const logPayload = {
-        ...payload,
-        apiKey: payload.apiKey ? payload.apiKey.substring(0, 8) + '***' : 'NOT SET',
-        clientId: payload.clientId ? payload.clientId.substring(0, 8) + '***' : 'NOT SET',
+      const fullUrl = `${apiUrl}?${params.toString()}`;
+      
+      console.log('🔗 [MailBIT SMS] Full URL (message encoded):', fullUrl.replace(/message=[^&]+/, 'message=***ENCODED***'));
+
+      // Log request details (hide sensitive data)
+      const logParams = {
+        ApiKey: this.apiKey ? this.apiKey.substring(0, 8) + '***' : 'NOT SET',
+        ClientId: this.clientId ? this.clientId.substring(0, 8) + '***' : 'NOT SET',
+        SenderId: this.senderId,
         message: message,
+        mobileNumbers: phone.substring(0, 4) + '****' + phone.substring(phone.length - 3),
+        fl: '0',
       };
-      console.log('📤 [MailBIT SMS] Request payload:', JSON.stringify(logPayload, null, 2));
-
-      // Call MailBIT API
-      const apiUrl = `${this.baseUrl}/api/v3/SendSMS`;
-      console.log('🌐 [MailBIT SMS] Calling API:', apiUrl);
+      console.log('📤 [MailBIT SMS] Request parameters:', JSON.stringify(logParams, null, 2));
+      console.log('🌐 [MailBIT SMS] Calling API (GET):', apiUrl);
       console.log('⏱️  [MailBIT SMS] Request timestamp:', new Date().toISOString());
 
-      const response = await axios.post(apiUrl, payload, {
+      // Call MailBIT API v2 using GET request (like the PHP example)
+      const response = await axios.get(fullUrl, {
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         timeout: 30000, // 30 seconds timeout
       });

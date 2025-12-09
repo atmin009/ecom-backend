@@ -374,21 +374,50 @@ class PaymentService {
    */
   async handleWebhook(payload: any): Promise<{ success: boolean; orderId?: number }> {
     try {
-      const transactionId = payload.transaction_id || payload.id;
-      const orderNumber = payload.order_id || payload.order_number;
+      console.log('🔍 [Webhook Handler] Starting webhook processing:', {
+        payload: JSON.stringify(payload, null, 2),
+        timestamp: new Date().toISOString(),
+      });
+
+      const transactionId = payload.transaction_id || payload.transectionID || payload.id;
+      const orderNumber = payload.order_id || payload.orderid || payload.order_number;
       const status = payload.status || payload.payment_status;
       const amount = payload.amount;
 
+      console.log('🔍 [Webhook Handler] Extracted data:', {
+        transactionId,
+        orderNumber,
+        status,
+        amount,
+        allPayloadKeys: Object.keys(payload),
+      });
+
+      console.log('🔍 [Webhook Handler] Looking for order:', orderNumber);
       const orderResult = await query(
         `SELECT id FROM orders WHERE order_number = ?`,
         [orderNumber]
       );
 
       if (orderResult.rows.length === 0) {
+        console.error('❌ [Webhook Handler] Order not found:', orderNumber);
         throw new Error(`Order not found: ${orderNumber}`);
       }
 
       const orderId = orderResult.rows[0].id;
+      console.log('✅ [Webhook Handler] Order found:', {
+        orderId,
+        orderNumber,
+      });
+
+      const paymentStatus = status === 'success' || status === 'paysuccess' || status === 'OK' ? 'success' : 'failed';
+      const orderPaymentStatus = paymentStatus === 'success' ? 'paid' : 'failed';
+
+      console.log('💾 [Webhook Handler] Updating payment and order status:', {
+        orderId,
+        paymentStatus,
+        orderPaymentStatus,
+        transactionId,
+      });
 
       await query(
         `UPDATE payments 
@@ -399,17 +428,28 @@ class PaymentService {
          WHERE order_id = ?
          ORDER BY created_at DESC
          LIMIT 1`,
-        [transactionId, status === 'success' ? 'success' : 'failed', JSON.stringify(payload), orderId]
+        [transactionId, paymentStatus, JSON.stringify(payload), orderId]
       );
 
       await query(
         `UPDATE orders 
          SET payment_status = ?, updated_at = NOW()
          WHERE id = ?`,
-        [status === 'success' ? 'paid' : 'failed', orderId]
+        [orderPaymentStatus, orderId]
       );
 
-      if (status === 'success') {
+      console.log('✅ [Webhook Handler] Database updated successfully');
+
+      // Check if payment is successful (support multiple status formats)
+      const isPaymentSuccess = status === 'success' || status === 'paysuccess' || status === 'OK';
+      
+      console.log('💰 [Webhook Handler] Payment status check:', {
+        originalStatus: status,
+        isPaymentSuccess,
+        willSendSMS: isPaymentSuccess,
+      });
+
+      if (isPaymentSuccess) {
         console.log('✅ [Payment Webhook] Payment successful, preparing to send SMS...');
         const orderResult = await query(
           `SELECT customer_phone, order_number FROM orders WHERE id = ?`,
@@ -489,7 +529,7 @@ class PaymentService {
         }
       } else {
         console.log('ℹ️  [Payment Webhook] Payment status is not success, skipping SMS:', {
-          status: status,
+          originalStatus: status,
           orderId: orderId,
         });
       }
@@ -506,18 +546,27 @@ class PaymentService {
    */
   async verifyMoneyspecWebhook(payload: any, signature: string): Promise<boolean> {
     try {
+      console.log('🔐 [Signature Verification] Starting verification:', {
+        hasSecretId: !!this.moneyspecSecretId,
+        hasSecretKey: !!this.moneyspecSecretKey,
+        hasSignature: !!signature,
+        signatureLength: signature?.length || 0,
+      });
+
       if (!this.moneyspecSecretId || !this.moneyspecSecretKey) {
-        console.warn('Moneyspace credentials not configured. Skipping signature verification.');
+        console.warn('⚠️  [Signature Verification] Moneyspace credentials not configured. Skipping signature verification.');
         return true;
       }
 
       if (signature && signature.length > 0) {
+        console.log('✅ [Signature Verification] Signature provided, accepting webhook');
         return true;
       }
 
+      console.warn('⚠️  [Signature Verification] No signature provided');
       return false;
     } catch (error) {
-      console.error('Error verifying Moneyspace webhook signature:', error);
+      console.error('❌ [Signature Verification] Error verifying signature:', error);
       return false;
     }
   }

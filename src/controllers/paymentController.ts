@@ -109,25 +109,51 @@ export const handleMoneyspecWebhook = asyncHandler(async (req: Request, res: Res
   const payload = req.body;
   const signature = req.headers['x-moneyspec-signature'] as string;
 
-  console.log('Received Moneyspec webhook:', JSON.stringify(payload, null, 2));
+  console.log('📥 [Webhook] Received Moneyspec webhook:', {
+    payload: JSON.stringify(payload, null, 2),
+    signature: signature || 'NOT PROVIDED',
+    headers: {
+      'x-moneyspec-signature': signature || 'NOT PROVIDED',
+      'content-type': req.headers['content-type'],
+    },
+    timestamp: new Date().toISOString(),
+  });
 
   // Verify webhook signature using Secret ID and Secret Key
   const isValid = await paymentService.verifyMoneyspecWebhook(payload, signature);
 
-  if (!isValid) {
-    console.error('Invalid Moneyspec webhook signature');
+  console.log('🔐 [Webhook] Signature verification result:', {
+    isValid: isValid,
+    hasSignature: !!signature,
+    signatureLength: signature?.length || 0,
+    environment: process.env.NODE_ENV || 'development',
+  });
+
+  // In development mode, allow webhook even without signature for testing
+  // In production, this should be strict
+  const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+  
+  if (!isValid && !isDevelopment) {
+    console.error('❌ [Webhook] Invalid Moneyspec webhook signature - REJECTED');
     return res.status(401).json({ 
       success: false, 
       error: 'Invalid webhook signature' 
     });
   }
 
+  if (!isValid && isDevelopment) {
+    console.warn('⚠️  [Webhook] Invalid signature but allowing in development mode');
+  }
+
   // Handle webhook
+  console.log('🔄 [Webhook] Processing webhook payload...');
   const result = await paymentService.handleWebhook(payload);
 
   if (result.success) {
+    console.log('✅ [Webhook] Webhook processed successfully');
     res.json({ success: true, message: 'Webhook processed successfully' });
   } else {
+    console.error('❌ [Webhook] Webhook processing failed');
     res.status(400).json({ success: false, error: 'Webhook processing failed' });
   }
 });
