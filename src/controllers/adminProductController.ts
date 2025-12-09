@@ -279,13 +279,24 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     original_price,
   });
 
-  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
-  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
-    if (!isoString || isoString.trim() === '') return null;
+  // Helper function to convert datetime string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  // Accepts both ISO string and MySQL DATETIME format (for backward compatibility)
+  const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
+    if (!dateString || dateString.trim() === '') return null;
     try {
-      const date = new Date(isoString);
+      const dateStr = dateString.trim();
+      
+      // If already in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS), return as is
+      const mysqlDateTimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+      if (mysqlDateTimeRegex.test(dateStr)) {
+        return dateStr;
+      }
+      
+      // If in ISO format or datetime-local format, parse and convert
+      const date = new Date(dateStr);
       if (isNaN(date.getTime())) return null;
-      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      
+      // Use local time components (not UTC) to preserve the time user selected
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -310,9 +321,9 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
       ? Number(original_price) 
       : null;
     
-    // Convert ISO dates to MySQL DATETIME format
-    const mysqlStartDate = convertISOToMySQLDateTime(promotion_start_date);
-    const mysqlEndDate = convertISOToMySQLDateTime(promotion_end_date);
+    // Convert dates to MySQL DATETIME format (preserve local time)
+    const mysqlStartDate = convertToMySQLDateTime(promotion_start_date);
+    const mysqlEndDate = convertToMySQLDateTime(promotion_end_date);
 
     console.log('📊 [Create Product] Prepared promotion values:', {
       promoPrice,
@@ -474,13 +485,24 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
     }
   }
 
-  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
-  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
-    if (!isoString || isoString.trim() === '') return null;
+  // Helper function to convert datetime string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  // Accepts both ISO string and MySQL DATETIME format (for backward compatibility)
+  const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
+    if (!dateString || dateString.trim() === '') return null;
     try {
-      const date = new Date(isoString);
+      const dateStr = dateString.trim();
+      
+      // If already in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS), return as is
+      const mysqlDateTimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+      if (mysqlDateTimeRegex.test(dateStr)) {
+        return dateStr;
+      }
+      
+      // If in ISO format or datetime-local format, parse and convert
+      const date = new Date(dateStr);
       if (isNaN(date.getTime())) return null;
-      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      
+      // Use local time components (not UTC) to preserve the time user selected
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -526,10 +548,10 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   safePush('features = ?', features);
   // Promotion fields - always include them to allow clearing promotion
   // Always include promotion fields in update, even if they're null/empty, to allow clearing
-  // Convert ISO dates to MySQL DATETIME format before saving
+  // Convert dates to MySQL DATETIME format before saving (preserve local time)
   safePush('promotion_price = ?', promotion_price !== undefined && promotion_price !== null && promotion_price !== '' ? Number(promotion_price) : null);
-  safePush('promotion_start_date = ?', promotion_start_date !== undefined ? convertISOToMySQLDateTime(promotion_start_date) : null);
-  safePush('promotion_end_date = ?', promotion_end_date !== undefined ? convertISOToMySQLDateTime(promotion_end_date) : null);
+  safePush('promotion_start_date = ?', promotion_start_date !== undefined ? convertToMySQLDateTime(promotion_start_date) : null);
+  safePush('promotion_end_date = ?', promotion_end_date !== undefined ? convertToMySQLDateTime(promotion_end_date) : null);
   safePush('promotion_action = ?', promotion_action !== undefined && promotion_action !== null && promotion_action !== '' ? promotion_action : null);
   safePush('original_price = ?', original_price !== undefined && original_price !== null && original_price !== '' ? Number(original_price) : null);
 

@@ -171,13 +171,24 @@ export const createAdminPromotion = asyncHandler(async (req: Request, res: Respo
     });
   }
 
-  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
-  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
-    if (!isoString || isoString.trim() === '') return null;
+  // Helper function to convert datetime string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  // Accepts both ISO string and MySQL DATETIME format (for backward compatibility)
+  const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
+    if (!dateString || dateString.trim() === '') return null;
     try {
-      const date = new Date(isoString);
+      const dateStr = dateString.trim();
+      
+      // If already in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS), return as is
+      const mysqlDateTimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+      if (mysqlDateTimeRegex.test(dateStr)) {
+        return dateStr;
+      }
+      
+      // If in ISO format or datetime-local format, parse and convert
+      const date = new Date(dateStr);
       if (isNaN(date.getTime())) return null;
-      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      
+      // Use local time components (not UTC) to preserve the time user selected
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -190,9 +201,9 @@ export const createAdminPromotion = asyncHandler(async (req: Request, res: Respo
     }
   };
 
-  // Convert ISO dates to MySQL DATETIME format
-  const mysqlStartDate = convertISOToMySQLDateTime(start_date);
-  const mysqlEndDate = convertISOToMySQLDateTime(end_date);
+  // Convert dates to MySQL DATETIME format (preserve local time)
+  const mysqlStartDate = convertToMySQLDateTime(start_date);
+  const mysqlEndDate = convertToMySQLDateTime(end_date);
 
   const connection = await pool.getConnection();
   try {
@@ -291,13 +302,24 @@ export const updateAdminPromotion = asyncHandler(async (req: Request, res: Respo
     });
   }
 
-  // Helper function to convert ISO string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
-  const convertISOToMySQLDateTime = (isoString: string | null | undefined): string | null => {
-    if (!isoString || isoString.trim() === '') return null;
+  // Helper function to convert datetime string to MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+  // Accepts both ISO string and MySQL DATETIME format (for backward compatibility)
+  const convertToMySQLDateTime = (dateString: string | null | undefined): string | null => {
+    if (!dateString || dateString.trim() === '') return null;
     try {
-      const date = new Date(isoString);
+      const dateStr = dateString.trim();
+      
+      // If already in MySQL DATETIME format (YYYY-MM-DD HH:MM:SS), return as is
+      const mysqlDateTimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+      if (mysqlDateTimeRegex.test(dateStr)) {
+        return dateStr;
+      }
+      
+      // If in ISO format or datetime-local format, parse and convert
+      const date = new Date(dateStr);
       if (isNaN(date.getTime())) return null;
-      // Convert to MySQL DATETIME format: YYYY-MM-DD HH:MM:SS
+      
+      // Use local time components (not UTC) to preserve the time user selected
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -326,8 +348,8 @@ export const updateAdminPromotion = asyncHandler(async (req: Request, res: Respo
     if (buy_quantity !== undefined) { updateFields.push('buy_quantity = ?'); updateValues.push(buy_quantity); }
     if (get_quantity !== undefined) { updateFields.push('get_quantity = ?'); updateValues.push(get_quantity); }
     if (free_gift_product_id !== undefined) { updateFields.push('free_gift_product_id = ?'); updateValues.push(free_gift_product_id); }
-    if (start_date !== undefined) { updateFields.push('start_date = ?'); updateValues.push(convertISOToMySQLDateTime(start_date)); }
-    if (end_date !== undefined) { updateFields.push('end_date = ?'); updateValues.push(convertISOToMySQLDateTime(end_date)); }
+    if (start_date !== undefined) { updateFields.push('start_date = ?'); updateValues.push(convertToMySQLDateTime(start_date)); }
+    if (end_date !== undefined) { updateFields.push('end_date = ?'); updateValues.push(convertToMySQLDateTime(end_date)); }
     if (is_active !== undefined) { updateFields.push('is_active = ?'); updateValues.push(is_active); }
     if (usage_limit !== undefined) { updateFields.push('usage_limit = ?'); updateValues.push(usage_limit); }
 
