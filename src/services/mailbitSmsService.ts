@@ -4,10 +4,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
- * MailBIT SMS Service - Fixed for Thai characters
+ * SMS Service - Supports Thai characters via Unicode
  * 
- * Service for sending SMS via MailBIT API
- * Documentation: https://sms.mailbit.co.th
+ * Service for sending SMS via send-sms.in.th API
+ * API Documentation: https://api.send-sms.in.th/api/v2/SendSMS
+ * 
+ * Format: GET https://api.send-sms.in.th/api/v2/SendSMS?SenderId=...&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
  */
 class MailbitSmsService {
   private baseUrl: string;
@@ -21,19 +23,20 @@ class MailbitSmsService {
     const clientId = process.env.MAILBIT_CLIENT_ID;
     const senderId = process.env.MAILBIT_SENDER_ID;
 
-    this.baseUrl = baseUrl || 'http://dplus.mailbit.co.th';
-    this.apiKey = apiKey || 'AU1HC4ePG3eCR0pOBzK01xmJ/4i+wbShEah1RlYSYuE=';
-    this.clientId = clientId || '63d4a713-08f1-4978-bdf5-7e9eb4409875';
+    // Use new API endpoint: https://api.send-sms.in.th
+    this.baseUrl = baseUrl || 'https://api.send-sms.in.th';
+    this.apiKey = apiKey || '';
+    this.clientId = clientId || '';
     this.senderId = senderId || 'ABLEMEN';
 
-    console.log('📋 MailBIT SMS Service Configuration:');
-    console.log(`  Base URL: ${this.baseUrl}`);
-    console.log(`  Sender ID: ${this.senderId}`);
+    console.log('📋 SMS Service Configuration:');
+    console.log(`  Base URL: ${this.baseUrl} (from ${baseUrl ? '.env' : 'default'})`);
+    console.log(`  Sender ID: ${this.senderId} (from ${senderId ? '.env' : 'default'})`);
     console.log(`  API Key: ${this.apiKey ? '✅ Configured (' + this.apiKey.substring(0, 8) + '...)' : '❌ Not configured'}`);
     console.log(`  Client ID: ${this.clientId ? '✅ Configured (' + this.clientId.substring(0, 8) + '...)' : '❌ Not configured'}`);
 
     if (!this.apiKey || !this.clientId) {
-      console.warn('⚠️  MailBIT SMS credentials not fully configured.');
+      console.warn('⚠️  SMS credentials not fully configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env file.');
     }
   }
 
@@ -66,111 +69,36 @@ class MailbitSmsService {
 
       if (!this.apiKey || !this.clientId) {
         throw new Error(
-          'MailBIT credentials not configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env'
+          'SMS credentials not configured. Please set MAILBIT_API_KEY and MAILBIT_CLIENT_ID in .env'
         );
       }
 
       // SMS message in Thai
       const message = `ระบบได้รับการชำระเงินเรียบร้อย ขอบคุณที่เลือกฟิล์มกระจกโฟกัส เลขที่คำสั่งซื้อ ${orderId} กำลังดำเนินการจัดส่ง`;
 
-      console.log('📱 [MailBIT SMS] Starting SMS send:', {
+      console.log('📱 [SMS] Starting SMS send:', {
         phone: phone,
         orderId: orderId,
         messageLength: message.length,
+        messagePreview: message.substring(0, 50) + '...',
       });
 
-      const apiUrl = `${this.baseUrl}/api/v2/SendSMS`;
-
-      // Method 1: Try with Unicode (UTF-8) - RECOMMENDED
-      const payloadUnicode = {
-        ApiKey: this.apiKey,
-        ClientId: this.clientId,
-        SenderId: this.senderId,
-        Message: message, // Use UTF-8 directly
-        MobileNumbers: phone,
-        Is_Unicode: true, // TRUE for Thai characters
-        Is_Flash: false,
-      };
-
-      console.log('📤 [MailBIT SMS] Sending with UTF-8 Unicode');
-      console.log('🌐 [MailBIT SMS] API URL:', apiUrl);
-
-      const response = await axios.post(apiUrl, payloadUnicode, {
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Accept': 'application/json',
-        },
-        timeout: 30000,
-      });
-
-      console.log('✅ [MailBIT SMS] Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        data: response.data,
-      });
-
-      // Check for success
-      if (response.data.ErrorCode === 0) {
-        console.log('✅ [MailBIT SMS] SMS sent successfully!');
-      } else {
-        console.error('❌ [MailBIT SMS] API returned error:', response.data);
-      }
-
-      return response.data;
-
-    } catch (error: any) {
-      console.error('❌ [MailBIT SMS] Error:', {
-        message: error.message,
-        orderId: orderId,
-      });
-
-      if (error.response) {
-        console.error('❌ [MailBIT SMS] API error:', {
-          status: error.response.status,
-          data: error.response.data,
-        });
-        throw new Error(
-          error.response.data?.ErrorDescription || 
-          `MailBIT API error: ${error.response.status}`
-        );
-      } else if (error.request) {
-        throw new Error('No response from MailBIT API. Check network connection.');
-      } else {
-        throw new Error(`Failed to send SMS: ${error.message}`);
-      }
-    }
-  }
-
-  /**
-   * Alternative method: Send with GET request (if POST doesn't work)
-   * Some MailBIT implementations prefer GET requests
-   */
-  async sendPaymentSuccessSmsViaGET({
-    phone,
-    orderId,
-  }: {
-    phone: string;
-    orderId: string;
-  }): Promise<any> {
-    try {
-      const message = `ระบบได้รับการชำระเงินเรียบร้อย ขอบคุณที่เลือกฟิล์มกระจกโฟกัส เลขที่คำสั่งซื้อ ${orderId} กำลังดำเนินการจัดส่ง`;
-      
-      console.log('📱 [MailBIT SMS] Trying GET method...');
-
-      // Build URL with query parameters
-      const params = new URLSearchParams({
-        ApiKey: this.apiKey,
-        ClientId: this.clientId,
-        SenderId: this.senderId,
-        message: message, // URLSearchParams will encode UTF-8 automatically
-        mobileNumbers: phone,
-        fl: '0', // 0 = normal SMS, 1 = flash SMS
-      });
+      // Build URL with query parameters (GET request)
+      // Format: https://api.send-sms.in.th/api/v2/SendSMS?SenderId=ABLEMEN&Is_Unicode=true&Message=...&MobileNumbers=...&ApiKey=...&ClientId=...
+      const params = new URLSearchParams();
+      params.append('SenderId', this.senderId);
+      params.append('Is_Unicode', 'true'); // TRUE for Thai characters
+      params.append('Message', message); // URLSearchParams will encode UTF-8 automatically
+      params.append('MobileNumbers', phone);
+      params.append('ApiKey', this.apiKey);
+      params.append('ClientId', this.clientId);
 
       const apiUrl = `${this.baseUrl}/api/v2/SendSMS?${params.toString()}`;
 
-      console.log('🌐 [MailBIT SMS] GET URL (encoded)');
+      console.log('📤 [SMS] Sending via GET request with Unicode support');
+      console.log('🌐 [SMS] API URL:', apiUrl.replace(this.apiKey, '***HIDDEN***').replace(this.clientId, '***HIDDEN***'));
 
+      // Send GET request
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
@@ -178,14 +106,50 @@ class MailbitSmsService {
         timeout: 30000,
       });
 
-      console.log('✅ [MailBIT SMS] Response:', response.data);
+      console.log('✅ [SMS] Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data,
+      });
+
+      // Check for success (adjust based on actual API response format)
+      if (response.data.ErrorCode === 0 || response.status === 200) {
+        console.log('✅ [SMS] SMS sent successfully!');
+      } else {
+        console.error('❌ [SMS] API returned error:', response.data);
+      }
+
       return response.data;
 
     } catch (error: any) {
-      console.error('❌ [MailBIT SMS] GET method error:', error.message);
-      throw error;
+      console.error('❌ [SMS] Error:', {
+        message: error.message,
+        orderId: orderId,
+        phone: phone.substring(0, 4) + '****' + phone.substring(phone.length - 3),
+      });
+
+      if (error.response) {
+        console.error('❌ [SMS] API error:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+        });
+        throw new Error(
+          error.response.data?.ErrorDescription || 
+          error.response.data?.error ||
+          `SMS API error: ${error.response.status} ${error.response.statusText}`
+        );
+      } else if (error.request) {
+        console.error('❌ [SMS] No response from API:', {
+          url: error.config?.url?.replace(this.apiKey, '***HIDDEN***'),
+        });
+        throw new Error('No response from SMS API. Check network connection.');
+      } else {
+        throw new Error(`Failed to send SMS: ${error.message}`);
+      }
     }
   }
+
 }
 
 export const mailbitSmsService = new MailbitSmsService();

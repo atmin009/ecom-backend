@@ -174,6 +174,9 @@ export const getAdminProductById = asyncHandler(async (req: Request, res: Respon
  * POST /api/admin/products
  */
 export const createAdminProduct = asyncHandler(async (req: Request, res: Response) => {
+  console.log('📥 [Create Product] Request received');
+  console.log('📥 [Create Product] Request body keys:', Object.keys(req.body));
+  
   const authReq = req as AuthRequest;
   const {
     name,
