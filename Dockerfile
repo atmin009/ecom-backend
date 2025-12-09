@@ -8,7 +8,9 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+# Using npm install instead of npm ci to avoid integrity checksum issues
+# npm ci requires exact match with package-lock.json integrity checksums
+RUN npm install --only=production --legacy-peer-deps
 
 # Copy TypeScript config
 COPY tsconfig.json ./
