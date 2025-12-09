@@ -61,14 +61,36 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   
   const result = await query(queryStr, params.length > 0 ? params : undefined);
   
-  // Helper function to convert MySQL DATETIME to ISO string
-  const convertDateToISO = (dateValue: any): string | undefined => {
+  // Helper function to convert MySQL DATETIME to string (keep as DATETIME format, don't convert to UTC)
+  // MySQL DATETIME is stored in local time, so we should keep it as-is for frontend
+  const convertDateToString = (dateValue: any): string | undefined => {
     if (!dateValue) return undefined;
     try {
-      // MySQL DATETIME comes as string "YYYY-MM-DD HH:MM:SS" or Date object
-      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      // If already a string in MySQL DATETIME format, return as-is
+      if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateValue)) {
+        return dateValue;
+      }
+      // If Date object, convert to MySQL DATETIME format using local time
+      if (dateValue instanceof Date) {
+        if (isNaN(dateValue.getTime())) return undefined;
+        const year = dateValue.getFullYear();
+        const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+        const day = String(dateValue.getDate()).padStart(2, '0');
+        const hours = String(dateValue.getHours()).padStart(2, '0');
+        const minutes = String(dateValue.getMinutes()).padStart(2, '0');
+        const seconds = String(dateValue.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
+      // Try parsing as date string
+      const date = new Date(dateValue);
       if (isNaN(date.getTime())) return undefined;
-      return date.toISOString();
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     } catch {
       return undefined;
     }
@@ -93,10 +115,10 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
-    // Promotion fields - convert dates to ISO strings
+    // Promotion fields - keep dates as MySQL DATETIME format (local time)
     promotion_price: row.promotion_price,
-    promotion_start_date: convertDateToISO(row.promotion_start_date),
-    promotion_end_date: convertDateToISO(row.promotion_end_date),
+    promotion_start_date: convertDateToString(row.promotion_start_date),
+    promotion_end_date: convertDateToString(row.promotion_end_date),
     promotion_action: row.promotion_action,
     original_price: row.original_price,
     category: row.category_id ? {
@@ -149,13 +171,35 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
     });
   }
 
-  // Helper function to convert MySQL DATETIME to ISO string
-  const convertDateToISO = (dateValue: any): string | undefined => {
+  // Helper function to convert MySQL DATETIME to string (keep as DATETIME format, don't convert to UTC)
+  const convertDateToString = (dateValue: any): string | undefined => {
     if (!dateValue) return undefined;
     try {
-      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      // If already a string in MySQL DATETIME format, return as-is
+      if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateValue)) {
+        return dateValue;
+      }
+      // If Date object, convert to MySQL DATETIME format using local time
+      if (dateValue instanceof Date) {
+        if (isNaN(dateValue.getTime())) return undefined;
+        const year = dateValue.getFullYear();
+        const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+        const day = String(dateValue.getDate()).padStart(2, '0');
+        const hours = String(dateValue.getHours()).padStart(2, '0');
+        const minutes = String(dateValue.getMinutes()).padStart(2, '0');
+        const seconds = String(dateValue.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
+      // Try parsing as date string
+      const date = new Date(dateValue);
       if (isNaN(date.getTime())) return undefined;
-      return date.toISOString();
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     } catch {
       return undefined;
     }
@@ -180,10 +224,10 @@ export const getProductById = asyncHandler(async (req: Request, res: Response) =
     thickness: row.thickness,
     hardness: row.hardness,
     features: row.features,
-    // Promotion fields - convert dates to ISO strings
+    // Promotion fields - keep dates as MySQL DATETIME format (local time)
     promotion_price: row.promotion_price,
-    promotion_start_date: convertDateToISO(row.promotion_start_date),
-    promotion_end_date: convertDateToISO(row.promotion_end_date),
+    promotion_start_date: convertDateToString(row.promotion_start_date),
+    promotion_end_date: convertDateToString(row.promotion_end_date),
     promotion_action: row.promotion_action,
     original_price: row.original_price,
     category: row.category_id ? {
