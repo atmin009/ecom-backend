@@ -140,15 +140,22 @@ export const getAdminOrderById = asyncHandler(async (req: Request, res: Response
     `SELECT oi.*, p.name as product_name, p.image_url as product_image, p.sku
      FROM order_items oi
      JOIN products p ON oi.product_id = p.id
-     WHERE oi.order_id = ?`,
+     WHERE oi.order_id = ?
+     ORDER BY oi.is_free_gift ASC, oi.id ASC`,
     [id]
   );
+
+  // Convert is_free_gift from 0/1 to boolean
+  const items = (itemsResult.rows || []).map((item: any) => ({
+    ...item,
+    is_free_gift: Boolean(item.is_free_gift),
+  }));
 
   const response: ApiResponse<any> = {
     success: true,
     data: {
       ...order,
-      items: itemsResult.rows,
+      items: items,
     },
   };
 
