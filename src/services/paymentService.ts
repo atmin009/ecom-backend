@@ -410,6 +410,7 @@ class PaymentService {
       );
 
       if (status === 'success') {
+        console.log('✅ [Payment Webhook] Payment successful, preparing to send SMS...');
         const orderResult = await query(
           `SELECT customer_phone, order_number FROM orders WHERE id = ?`,
           [orderId]
@@ -417,35 +418,80 @@ class PaymentService {
         if (orderResult.rows.length > 0) {
           const { customer_phone, order_number } = orderResult.rows[0];
           
+          console.log('📞 [Payment Webhook] Customer info retrieved:', {
+            orderId: orderId,
+            orderNumber: order_number,
+            customerPhone: customer_phone ? customer_phone.substring(0, 4) + '****' + customer_phone.substring(customer_phone.length - 3) : 'N/A',
+            hasPhone: !!customer_phone,
+          });
+          
           // Send payment success SMS via MailBIT
           // Normalize phone number to MailBIT format (6681xxxxxxx)
           let normalizedPhone = customer_phone;
           if (normalizedPhone) {
+            const originalPhone = normalizedPhone;
             // Remove spaces and dashes
             normalizedPhone = normalizedPhone.replace(/\s+/g, '').replace(/-/g, '');
+            
+            console.log('🔄 [Payment Webhook] Normalizing phone number:', {
+              original: originalPhone,
+              afterClean: normalizedPhone,
+            });
             
             // Convert to MailBIT format: 6681xxxxxxx
             // If starts with 0, replace with 66
             if (normalizedPhone.startsWith('0')) {
               normalizedPhone = '66' + normalizedPhone.substring(1);
+              console.log('🔄 [Payment Webhook] Phone starts with 0, replaced with 66:', normalizedPhone);
             } else if (!normalizedPhone.startsWith('66')) {
               // If doesn't start with 66, add it
               normalizedPhone = '66' + normalizedPhone;
+              console.log('🔄 [Payment Webhook] Phone doesn\'t start with 66, added 66:', normalizedPhone);
             }
             
+            console.log('📱 [Payment Webhook] Final normalized phone:', normalizedPhone);
+            console.log('📱 [Payment Webhook] Order number for SMS:', order_number);
+            
             // Send SMS (non-blocking - don't wait for completion)
+            console.log('🚀 [Payment Webhook] Initiating SMS send...');
             const { mailbitSmsService } = await import('./mailbitSmsService');
             mailbitSmsService
               .sendPaymentSuccessSms({
                 phone: normalizedPhone,
                 orderId: order_number,
               })
+              .then((result) => {
+                console.log('✅ [Payment Webhook] SMS sent successfully:', {
+                  orderNumber: order_number,
+                  phone: normalizedPhone.substring(0, 4) + '****' + normalizedPhone.substring(normalizedPhone.length - 3),
+                  result: result,
+                });
+              })
               .catch((error) => {
                 // Log error but don't fail the webhook
-                console.error('Failed to send payment success SMS:', error);
+                console.error('❌ [Payment Webhook] Failed to send payment success SMS:', {
+                  error: error.message,
+                  orderNumber: order_number,
+                  phone: normalizedPhone.substring(0, 4) + '****' + normalizedPhone.substring(normalizedPhone.length - 3),
+                  stack: error.stack,
+                });
               });
+          } else {
+            console.warn('⚠️  [Payment Webhook] No customer phone number found, skipping SMS:', {
+              orderId: orderId,
+              orderNumber: order_number,
+            });
           }
+        } else {
+          console.warn('⚠️  [Payment Webhook] Order not found for SMS sending:', {
+            orderId: orderId,
+          });
         }
+      } else {
+        console.log('ℹ️  [Payment Webhook] Payment status is not success, skipping SMS:', {
+          status: status,
+          orderId: orderId,
+        });
       }
 
       return { success: true, orderId };
