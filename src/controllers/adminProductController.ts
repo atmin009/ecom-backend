@@ -229,6 +229,15 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
     });
   }
 
+  // Log promotion data for debugging
+  console.log('📊 [Create Product] Promotion data:', {
+    promotion_price,
+    promotion_start_date,
+    promotion_end_date,
+    promotion_action,
+    original_price,
+  });
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -257,11 +266,11 @@ export const createAdminProduct = asyncHandler(async (req: Request, res: Respons
         thickness || null,
         hardness || null,
         features || null,
-        promotion_price || null,
+        promotion_price !== null && promotion_price !== undefined && promotion_price !== '' ? Number(promotion_price) : null,
         promotion_start_date || null,
         promotion_end_date || null,
         promotion_action || null,
-        original_price || null,
+        original_price !== null && original_price !== undefined && original_price !== '' ? Number(original_price) : null,
       ]
     );
 
@@ -389,16 +398,32 @@ export const updateAdminProduct = asyncHandler(async (req: Request, res: Respons
   safePush('thickness = ?', thickness);
   safePush('hardness = ?', hardness);
   safePush('features = ?', features);
-  // Promotion fields
+  // Promotion fields - always include them to allow clearing promotion
   if (promotion_price !== undefined) {
-    safePush('promotion_price = ?', promotion_price ? Number(promotion_price) : null);
+    safePush('promotion_price = ?', promotion_price !== null && promotion_price !== '' ? Number(promotion_price) : null);
   }
-  safePush('promotion_start_date = ?', promotion_start_date);
-  safePush('promotion_end_date = ?', promotion_end_date);
-  safePush('promotion_action = ?', promotion_action);
+  if (promotion_start_date !== undefined) {
+    safePush('promotion_start_date = ?', promotion_start_date || null);
+  }
+  if (promotion_end_date !== undefined) {
+    safePush('promotion_end_date = ?', promotion_end_date || null);
+  }
+  if (promotion_action !== undefined) {
+    safePush('promotion_action = ?', promotion_action || null);
+  }
   if (original_price !== undefined) {
-    safePush('original_price = ?', original_price ? Number(original_price) : null);
+    safePush('original_price = ?', original_price !== null && original_price !== '' ? Number(original_price) : null);
   }
+
+  // Log promotion data for debugging
+  console.log('📊 [Update Product] Promotion data:', {
+    promotion_price,
+    promotion_start_date,
+    promotion_end_date,
+    promotion_action,
+    original_price,
+    updateFields: updateFields.filter(f => f.includes('promotion') || f.includes('original')),
+  });
 
   if (updateFields.length === 0) {
     return res.status(400).json({
